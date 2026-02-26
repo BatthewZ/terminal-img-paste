@@ -41,24 +41,6 @@
         }
       ]
     },
-    "views": {
-      "terminalImgPaste": [
-        {
-          "id": "terminalImgPaste.dropZone",
-          "name": "Drop Zone",
-          "type": "webview"
-        }
-      ]
-    },
-    "viewsContainers": {
-      "activitybar": [
-        {
-          "id": "terminalImgPaste",
-          "title": "Image Paste",
-          "icon": "assets/icon.svg"
-        }
-      ]
-    },
     "configuration": {
       "title": "Terminal Image Paste",
       "properties": {
