@@ -215,24 +215,51 @@ describe('createImageStore', () => {
       expect(fs.promises.unlink).not.toHaveBeenCalled();
     });
 
-    it('is a no-op when maxImages is 0', async () => {
+    it('falls back to default (20) when maxImages is 0', async () => {
       setConfig('maxImages', 0);
 
       const store = createImageStore();
       await store.cleanup();
 
-      expect(fs.promises.readdir).not.toHaveBeenCalled();
-      expect(fs.promises.unlink).not.toHaveBeenCalled();
+      // Should fall back to 20 and proceed with cleanup (readdir is called)
+      expect(fs.promises.readdir).toHaveBeenCalled();
     });
 
-    it('is a no-op when maxImages is negative', async () => {
+    it('falls back to default (20) when maxImages is negative', async () => {
       setConfig('maxImages', -1);
 
       const store = createImageStore();
       await store.cleanup();
 
-      expect(fs.promises.readdir).not.toHaveBeenCalled();
-      expect(fs.promises.unlink).not.toHaveBeenCalled();
+      // Should fall back to 20 and proceed with cleanup (readdir is called)
+      expect(fs.promises.readdir).toHaveBeenCalled();
+    });
+
+    it('falls back to default (20) when maxImages is NaN', async () => {
+      setConfig('maxImages', NaN);
+
+      const store = createImageStore();
+      await store.cleanup();
+
+      expect(fs.promises.readdir).toHaveBeenCalled();
+    });
+
+    it('falls back to default (20) when maxImages is Infinity', async () => {
+      setConfig('maxImages', Infinity);
+
+      const store = createImageStore();
+      await store.cleanup();
+
+      expect(fs.promises.readdir).toHaveBeenCalled();
+    });
+
+    it('falls back to default (20) when maxImages is a decimal', async () => {
+      setConfig('maxImages', 2.5);
+
+      const store = createImageStore();
+      await store.cleanup();
+
+      expect(fs.promises.readdir).toHaveBeenCalled();
     });
 
     it('is a no-op when the image folder does not exist (readdir throws)', async () => {
@@ -268,6 +295,84 @@ describe('createImageStore', () => {
       expect(fs.promises.unlink).toHaveBeenCalledWith(
         path.join(IMAGE_FOLDER, 'img-2026-01-01T00-00-00-000.png'),
       );
+    });
+
+    it('continues deleting remaining files when one unlink fails', async () => {
+      setConfig('maxImages', 1);
+
+      const files = [
+        'img-2026-01-01T00-00-00-000.png',
+        'img-2026-01-02T00-00-00-000.png',
+        'img-2026-01-03T00-00-00-000.png',
+        'img-2026-01-04T00-00-00-000.png',
+      ];
+      vi.mocked(fs.promises.readdir).mockResolvedValue(
+        files as unknown as fs.Dirent[],
+      );
+
+      // Make the second unlink fail
+      vi.mocked(fs.promises.unlink)
+        .mockResolvedValueOnce(undefined)
+        .mockRejectedValueOnce(new Error('ENOENT'))
+        .mockResolvedValueOnce(undefined);
+
+      const store = createImageStore();
+      await store.cleanup();
+
+      // All 3 files should have been attempted (4 files - 1 maxImages = 3 to delete)
+      expect(fs.promises.unlink).toHaveBeenCalledTimes(3);
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('Failed to delete old image:'),
+        expect.any(Error),
+      );
+    });
+  });
+
+  describe('folderName path traversal validation', () => {
+    it('rejects folderName with ".." path traversal', async () => {
+      setConfig('folderName', '../../../etc');
+
+      const store = createImageStore();
+      await expect(store.save(Buffer.from('data'))).rejects.toThrow(
+        /resolves outside the workspace root/,
+      );
+    });
+
+    it('rejects folderName with absolute path on Unix', async () => {
+      setConfig('folderName', '/tmp/evil');
+
+      const store = createImageStore();
+      await expect(store.save(Buffer.from('data'))).rejects.toThrow(
+        /resolves outside the workspace root/,
+      );
+    });
+
+    it('rejects folderName that resolves to parent directory', async () => {
+      setConfig('folderName', '.tip-images/../../outside');
+
+      const store = createImageStore();
+      await expect(store.save(Buffer.from('data'))).rejects.toThrow(
+        /resolves outside the workspace root/,
+      );
+    });
+
+    it('allows valid subdirectory folderName', async () => {
+      setConfig('folderName', 'images');
+
+      const store = createImageStore();
+      await expect(store.save(Buffer.from('data'))).resolves.toBeDefined();
+    });
+
+    it('allows valid nested subdirectory folderName', async () => {
+      setConfig('folderName', 'assets/images/paste');
+
+      const store = createImageStore();
+      await expect(store.save(Buffer.from('data'))).resolves.toBeDefined();
+    });
+
+    it('allows default folderName (.tip-images)', async () => {
+      const store = createImageStore();
+      await expect(store.save(Buffer.from('data'))).resolves.toBeDefined();
     });
   });
 

@@ -36,7 +36,15 @@ function getFolderName(): string {
 }
 
 function getImageFolderPath(): string {
-  return path.join(getWorkspaceRoot(), getFolderName());
+  const root = getWorkspaceRoot();
+  const folderName = getFolderName();
+  const resolved = path.resolve(root, folderName);
+  if (resolved !== root && !resolved.startsWith(root + path.sep)) {
+    throw new Error(
+      `Configured folderName "${folderName}" resolves outside the workspace root`,
+    );
+  }
+  return resolved;
 }
 
 function generateFileName(): string {
@@ -71,10 +79,11 @@ export function createImageStore(): ImageStore {
 
     async cleanup(): Promise<void> {
       const config = getConfig();
-      const maxImages = config.get<number>('maxImages', 20);
-      if (maxImages <= 0) {
-        return;
-      }
+      const rawMaxImages = config.get<number>('maxImages', 20);
+      const maxImages =
+        Number.isInteger(rawMaxImages) && rawMaxImages > 0
+          ? rawMaxImages
+          : 20;
       const folder = getImageFolderPath();
 
       let entries: string[];
@@ -95,8 +104,12 @@ export function createImageStore(): ImageStore {
       const toDelete = pngFiles.slice(0, pngFiles.length - maxImages);
       for (const file of toDelete) {
         const filePath = path.join(folder, file);
-        await fs.promises.unlink(filePath);
-        logger.info(`Deleted old image: ${filePath}`);
+        try {
+          await fs.promises.unlink(filePath);
+          logger.info(`Deleted old image: ${filePath}`);
+        } catch (err) {
+          logger.warn(`Failed to delete old image: ${filePath}`, err);
+        }
       }
     },
 

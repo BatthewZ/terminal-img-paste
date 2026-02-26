@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import { ClipboardReader } from "./types";
 import { exec } from "../util/exec";
+import { logger } from "../util/logger";
 
 const PS_HAS_IMAGE =
   "Add-Type -AssemblyName System.Windows.Forms; if ([System.Windows.Forms.Clipboard]::ContainsImage()) { echo 'yes' } else { echo 'no' }";
@@ -57,7 +58,9 @@ export abstract class PowerShellClipboardReader implements ClipboardReader {
     try {
       return await fs.promises.readFile(localPath);
     } finally {
-      fs.promises.unlink(localPath).catch(() => {});
+      fs.promises.unlink(localPath).catch((err) => {
+        logger.warn(`Failed to clean up temp file: ${localPath}`, err);
+      });
     }
   }
 }

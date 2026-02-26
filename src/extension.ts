@@ -4,6 +4,7 @@ import { createClipboardReader, ClipboardReader } from './clipboard/index';
 import { createImageStore, ImageStore } from './storage/imageStore';
 import { insertPathToTerminal } from './terminal/insertPath';
 import { logger } from './util/logger';
+import { Mutex } from './util/mutex';
 
 function handleCommandError(commandName: string, err: unknown): void {
   const message = err instanceof Error ? err.message : String(err);
@@ -28,9 +29,12 @@ export function activate(context: vscode.ExtensionContext): void {
     logger.error('Failed to check tool availability', err);
   });
 
+  const pasteMutex = new Mutex();
+
   const pasteImageDisposable = vscode.commands.registerCommand(
     'terminalImgPaste.pasteImage',
     async () => {
+      const release = await pasteMutex.acquire();
       try {
         const toolAvailable = await reader.isToolAvailable();
         if (!toolAvailable) {
@@ -54,6 +58,8 @@ export function activate(context: vscode.ExtensionContext): void {
         vscode.window.setStatusBarMessage('Image pasted to terminal', 3000);
       } catch (err) {
         handleCommandError('pasteImage', err);
+      } finally {
+        release();
       }
     },
   );
