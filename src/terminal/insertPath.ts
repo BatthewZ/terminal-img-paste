@@ -3,7 +3,7 @@ import { logger } from '../util/logger';
 
 /**
  * Send a file path to the active terminal.
- * Quotes the path if it contains spaces.
+ * Single-quotes the path to prevent shell expansion of special characters.
  * Reads `sendNewline` setting to decide whether to append a newline.
  */
 export function insertPathToTerminal(filePath: string): void {
@@ -15,7 +15,8 @@ export function insertPathToTerminal(filePath: string): void {
     return;
   }
 
-  const text = filePath.includes(' ') ? `"${filePath}"` : filePath;
+  // Single-quote the path, escaping any embedded single quotes
+  const text = "'" + filePath.replace(/'/g, "'\\''") + "'";
 
   const config = vscode.workspace.getConfiguration('terminalImgPaste');
   const addNewline = config.get<boolean>('sendNewline', false);
