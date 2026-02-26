@@ -618,7 +618,111 @@ describe("WslClipboardReader", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 6. PowerShellClipboardReader (shared behaviour via WindowsClipboardReader)
+// 6. Error paths — readImage propagation
+// ---------------------------------------------------------------------------
+describe("readImage error paths", () => {
+  describe("MacosClipboardReader", () => {
+    let reader: MacosClipboardReader;
+
+    beforeEach(() => {
+      reader = new MacosClipboardReader();
+    });
+
+    it("throws when execBuffer rejects (pngpaste crash)", async () => {
+      // hasImage -> true
+      mockExec.mockResolvedValueOnce({ stdout: "«class PNGf», 42", stderr: "" });
+      // execBuffer -> pngpaste crashes
+      mockExecBuffer.mockRejectedValueOnce(new Error("pngpaste segfault"));
+      await expect(reader.readImage()).rejects.toThrow("pngpaste segfault");
+    });
+  });
+
+  describe("LinuxClipboardReader (X11)", () => {
+    let reader: LinuxClipboardReader;
+
+    beforeEach(() => {
+      reader = new LinuxClipboardReader("x11");
+    });
+
+    it("throws when execBuffer rejects (xclip crash)", async () => {
+      // hasImage -> true
+      mockExec.mockResolvedValueOnce({ stdout: "image/png\nTIMESTAMP", stderr: "" });
+      // execBuffer -> xclip crashes
+      mockExecBuffer.mockRejectedValueOnce(new Error("xclip: cannot connect to X server"));
+      await expect(reader.readImage()).rejects.toThrow("xclip: cannot connect to X server");
+    });
+  });
+
+  describe("LinuxClipboardReader (Wayland)", () => {
+    let reader: LinuxClipboardReader;
+
+    beforeEach(() => {
+      reader = new LinuxClipboardReader("wayland");
+    });
+
+    it("throws when execBuffer rejects (wl-paste crash)", async () => {
+      mockExec.mockResolvedValueOnce({ stdout: "image/png\ntext/plain", stderr: "" });
+      mockExecBuffer.mockRejectedValueOnce(new Error("wl-paste: no wayland display"));
+      await expect(reader.readImage()).rejects.toThrow("wl-paste: no wayland display");
+    });
+  });
+
+  describe("WslClipboardReader", () => {
+    let reader: WslClipboardReader;
+
+    beforeEach(() => {
+      reader = new WslClipboardReader(
+        makePlatform({ os: "linux", isWSL: true, powershellPath: "/mnt/c/ps.exe" }),
+      );
+    });
+
+    it("throws when wslpath fails", async () => {
+      const winPath = "C:\\Temp\\img.tmp";
+      // hasImage -> yes
+      mockExec.mockResolvedValueOnce({ stdout: "yes\r\n", stderr: "" });
+      // PS_READ_IMAGE -> returns temp path
+      mockExec.mockResolvedValueOnce({ stdout: `${winPath}\r\n`, stderr: "" });
+      // wslpath -> fails
+      mockExec.mockRejectedValueOnce(new Error("wslpath: command not found"));
+      await expect(reader.readImage()).rejects.toThrow("wslpath: command not found");
+    });
+
+    it("throws when PowerShell returns empty stdout (no temp path)", async () => {
+      // hasImage -> yes
+      mockExec.mockResolvedValueOnce({ stdout: "yes\r\n", stderr: "" });
+      // PS_READ_IMAGE -> empty stdout
+      mockExec.mockResolvedValueOnce({ stdout: "\r\n", stderr: "" });
+      // wslpath called with empty string
+      mockExec.mockResolvedValueOnce({ stdout: "\n", stderr: "" });
+      // readFile with empty path fails
+      mockReadFile.mockRejectedValueOnce(new Error("ENOENT: no such file or directory, open ''"));
+      mockUnlink.mockResolvedValueOnce(undefined);
+      await expect(reader.readImage()).rejects.toThrow("ENOENT");
+    });
+  });
+
+  describe("WindowsClipboardReader", () => {
+    let reader: WindowsClipboardReader;
+
+    beforeEach(() => {
+      reader = new WindowsClipboardReader();
+    });
+
+    it("throws when PowerShell returns empty stdout (no temp path)", async () => {
+      // hasImage -> yes
+      mockExec.mockResolvedValueOnce({ stdout: "yes\r\n", stderr: "" });
+      // PS_READ_IMAGE -> empty stdout
+      mockExec.mockResolvedValueOnce({ stdout: "\r\n", stderr: "" });
+      // readFile with empty path fails
+      mockReadFile.mockRejectedValueOnce(new Error("ENOENT: no such file or directory, open ''"));
+      mockUnlink.mockResolvedValueOnce(undefined);
+      await expect(reader.readImage()).rejects.toThrow("ENOENT");
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 7. PowerShellClipboardReader (shared behaviour via WindowsClipboardReader)
 // ---------------------------------------------------------------------------
 describe("PowerShellClipboardReader (shared base behaviour)", () => {
   // We test shared behaviour through WindowsClipboardReader since the base

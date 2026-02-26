@@ -224,6 +224,32 @@ describe("util/exec", () => {
         expect.any(Function),
       );
     });
+
+    it("rejects with proper message on ETIMEDOUT", async () => {
+      mockedExecFile.mockImplementation(
+        ((_cmd: any, _args: any, _opts: any, cb: any) => {
+          const err: NodeJS.ErrnoException = new Error("timed out");
+          err.code = "ETIMEDOUT";
+          cb(err, "", "");
+        }) as any,
+      );
+
+      await expect(exec("slow-cmd", [])).rejects.toThrow("ETIMEDOUT");
+    });
+
+    it("rejects on maxBuffer exceeded (ERR_CHILD_PROCESS_STDIO_MAXBUFFER)", async () => {
+      mockedExecFile.mockImplementation(
+        ((_cmd: any, _args: any, _opts: any, cb: any) => {
+          const err: NodeJS.ErrnoException = new Error("maxBuffer exceeded");
+          err.code = "ERR_CHILD_PROCESS_STDIO_MAXBUFFER";
+          cb(err, "", "stdout maxBuffer length exceeded");
+        }) as any,
+      );
+
+      await expect(exec("big-output", [])).rejects.toThrow(
+        "stdout maxBuffer length exceeded",
+      );
+    });
   });
 
   // -----------------------------------------------------------------------
@@ -455,6 +481,32 @@ describe("util/exec", () => {
         [],
         expect.objectContaining({ maxBuffer: 100 * 1024 * 1024 }),
         expect.any(Function),
+      );
+    });
+
+    it("rejects on ETIMEDOUT", async () => {
+      mockedExecFile.mockImplementation(
+        ((_cmd: any, _args: any, _opts: any, cb: any) => {
+          const err: NodeJS.ErrnoException = new Error("timed out");
+          err.code = "ETIMEDOUT";
+          cb(err, Buffer.alloc(0), Buffer.alloc(0));
+        }) as any,
+      );
+
+      await expect(execBuffer("slow-cmd", [])).rejects.toThrow("ETIMEDOUT");
+    });
+
+    it("rejects on maxBuffer exceeded (ERR_CHILD_PROCESS_STDIO_MAXBUFFER)", async () => {
+      mockedExecFile.mockImplementation(
+        ((_cmd: any, _args: any, _opts: any, cb: any) => {
+          const err: NodeJS.ErrnoException = new Error("maxBuffer exceeded");
+          err.code = "ERR_CHILD_PROCESS_STDIO_MAXBUFFER";
+          cb(err, Buffer.alloc(0), Buffer.from("stdout maxBuffer length exceeded"));
+        }) as any,
+      );
+
+      await expect(execBuffer("big-output", [])).rejects.toThrow(
+        "stdout maxBuffer length exceeded",
       );
     });
   });

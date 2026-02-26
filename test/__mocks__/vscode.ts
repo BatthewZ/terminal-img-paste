@@ -10,11 +10,22 @@ const terminal = {
   sendText: vi.fn(),
 };
 
+// Command registry for testing command registration
+const registeredCommands: Map<string, (...args: unknown[]) => unknown> = new Map();
+
+export const commands = {
+  registerCommand: vi.fn((id: string, handler: (...args: unknown[]) => unknown) => {
+    registeredCommands.set(id, handler);
+    return { dispose: vi.fn() };
+  }),
+};
+
 export const window = {
   createOutputChannel: vi.fn(() => outputChannel),
   showErrorMessage: vi.fn(),
   showWarningMessage: vi.fn(),
   showInformationMessage: vi.fn(),
+  setStatusBarMessage: vi.fn(),
   activeTerminal: terminal,
 };
 
@@ -52,4 +63,14 @@ export function __resetConfig(): void {
   configValues.maxImages = 20;
   configValues.autoGitIgnore = true;
   configValues.sendNewline = false;
+}
+
+// Helper to retrieve a registered command handler for testing
+export function __getRegisteredCommand(id: string): ((...args: unknown[]) => unknown) | undefined {
+  return registeredCommands.get(id);
+}
+
+// Helper to clear registered commands between tests
+export function __clearRegisteredCommands(): void {
+  registeredCommands.clear();
 }

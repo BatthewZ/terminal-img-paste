@@ -122,6 +122,29 @@ describe('insertPathToTerminal', () => {
     );
   });
 
+  // -- Edge cases ----------------------------------------------------------
+
+  it('handles empty string path', () => {
+    insertPathToTerminal('');
+    expect(window.activeTerminal!.sendText).toHaveBeenCalledWith("''", false);
+  });
+
+  it('handles unicode characters in path', () => {
+    insertPathToTerminal('/home/user/图片/截屏.png');
+    expect(window.activeTerminal!.sendText).toHaveBeenCalledWith(
+      "'/home/user/图片/截屏.png'",
+      false,
+    );
+  });
+
+  it("handles path that is only a single quote", () => {
+    insertPathToTerminal("'");
+    expect(window.activeTerminal!.sendText).toHaveBeenCalledWith(
+      "''\\'''",
+      false,
+    );
+  });
+
   // -- Logger --------------------------------------------------------------
 
   it('logs the quoted path via logger.info', () => {

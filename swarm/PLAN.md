@@ -133,3 +133,25 @@ terminal-img-paste/
 5. **Claude CLI test**: Paste an image path, then type a question about the image — confirm Claude processes it
 6. **Cleanup test**: Paste 25 images → confirm only 20 remain in `.tip-images/`
 7. **Run tests**: `npm test` passes
+
+### Phase 8: Test hardening
+
+Harden the test suite for production quality. Covers 0% coverage modules, missing error paths, edge cases, and integration tests.
+
+**Infrastructure:**
+- Extended `test/__mocks__/vscode.ts` with `commands.registerCommand` (stores handlers in a map), `window.setStatusBarMessage`, and helpers `__getRegisteredCommand`/`__clearRegisteredCommands`
+- Added V8 coverage config to `vitest.config.ts`
+
+**New test files:**
+- `test/extension.test.ts` (~19 tests) — activate, pasteImage command handler, sendPathToTerminal command handler, deactivate. Tests command registration, the full paste flow, mutex serialization, status bar messages, and all error branches.
+- `test/logger.test.ts` (~10 tests) — createLogger, info/warn/error/show methods, timestamp format, error stack handling.
+- `test/imageStore.integration.test.ts` (~8 tests) — Real filesystem tests against temp directories. Covers save, cleanup, ensureGitIgnored, and consecutive filename uniqueness.
+
+**Error paths added to existing tests:**
+- `test/clipboard.test.ts` (+7) — readImage throws when execBuffer rejects (pngpaste/xclip/wl-paste crash), wslpath failures, empty PowerShell stdout
+- `test/imageStore.test.ts` (+5) — undefined/empty workspaceFolders, mkdir/writeFile propagation, ensureGitIgnored writeFile failure
+- `test/exec.test.ts` (+4) — ETIMEDOUT and ERR_CHILD_PROCESS_STDIO_MAXBUFFER for both exec and execBuffer
+
+**Edge cases added:**
+- `test/insertPath.test.ts` (+3) — empty string, unicode characters, single-quote-only path
+- `test/mutex.test.ts` (+2) — double-release safety, rapid acquire-release stress test (50 cycles)

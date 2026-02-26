@@ -376,6 +376,56 @@ describe('createImageStore', () => {
     });
   });
 
+  describe('save() error paths', () => {
+    it('throws when workspaceFolders is undefined', async () => {
+      (workspace as any).workspaceFolders = undefined;
+
+      const store = createImageStore();
+      await expect(store.save(Buffer.from('data'))).rejects.toThrow(
+        'No workspace folder is open',
+      );
+    });
+
+    it('throws when workspaceFolders is empty', async () => {
+      (workspace as any).workspaceFolders = [];
+
+      const store = createImageStore();
+      await expect(store.save(Buffer.from('data'))).rejects.toThrow(
+        'No workspace folder is open',
+      );
+    });
+
+    it('propagates mkdir errors', async () => {
+      vi.mocked(fs.promises.mkdir).mockRejectedValue(new Error('EACCES: permission denied'));
+
+      const store = createImageStore();
+      await expect(store.save(Buffer.from('data'))).rejects.toThrow(
+        'EACCES: permission denied',
+      );
+    });
+
+    it('propagates writeFile errors', async () => {
+      vi.mocked(fs.promises.writeFile).mockRejectedValue(new Error('ENOSPC: no space left'));
+
+      const store = createImageStore();
+      await expect(store.save(Buffer.from('data'))).rejects.toThrow(
+        'ENOSPC: no space left',
+      );
+    });
+  });
+
+  describe('ensureGitIgnored() error paths', () => {
+    it('propagates writeFile failure when creating new .gitignore', async () => {
+      // readFile fails (no existing .gitignore)
+      vi.mocked(fs.promises.readFile).mockRejectedValue(new Error('ENOENT'));
+      // writeFile also fails
+      vi.mocked(fs.promises.writeFile).mockRejectedValue(new Error('EACCES: permission denied'));
+
+      const store = createImageStore();
+      await expect(store.ensureGitIgnored()).rejects.toThrow('EACCES: permission denied');
+    });
+  });
+
   describe('ensureGitIgnored()', () => {
     it('creates .gitignore with folder name if file does not exist', async () => {
       vi.mocked(fs.promises.readFile).mockRejectedValue(

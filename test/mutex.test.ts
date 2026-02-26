@@ -82,6 +82,50 @@ describe('Mutex', () => {
     expect(order).toEqual([1, 2, 3, 4]);
   });
 
+  it('double-release does not corrupt queue or allow concurrent execution', async () => {
+    const mutex = new Mutex();
+    const order: number[] = [];
+
+    const release1 = await mutex.acquire();
+
+    const promise2 = mutex.acquire().then((release2) => {
+      order.push(2);
+      release2();
+    });
+
+    // Release twice — second release should be a no-op
+    release1();
+    release1();
+
+    await promise2;
+    expect(order).toEqual([2]);
+
+    // Mutex should still work normally after double-release
+    const release3 = await mutex.acquire();
+    order.push(3);
+    release3();
+    expect(order).toEqual([2, 3]);
+  });
+
+  it('handles rapid acquire-release cycles (stress test)', async () => {
+    const mutex = new Mutex();
+    const results: number[] = [];
+
+    const tasks = Array.from({ length: 50 }, (_, i) =>
+      mutex.acquire().then((release) => {
+        results.push(i);
+        release();
+      }),
+    );
+
+    await Promise.all(tasks);
+
+    // All 50 tasks should have executed
+    expect(results).toHaveLength(50);
+    // First task should always be 0 (it acquires immediately)
+    expect(results[0]).toBe(0);
+  });
+
   it('can be reused after all waiters are served', async () => {
     const mutex = new Mutex();
 
