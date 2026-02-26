@@ -1,12 +1,20 @@
 import { execFile } from "child_process";
 
 const DEFAULT_TIMEOUT = 10_000;
+const DEFAULT_MAX_BUFFER = 10 * 1024 * 1024; // 10 MB
+const DEFAULT_MAX_BUFFER_BINARY = 50 * 1024 * 1024; // 50 MB
 
 function exitCode(error: Error): string | number {
   if ("code" in error && typeof error.code === "number") {
     return error.code;
   }
   return (error as NodeJS.ErrnoException).code ?? "unknown";
+}
+
+export interface ExecOptions {
+  timeout?: number;
+  cwd?: string;
+  maxBuffer?: number;
 }
 
 export interface ExecResult {
@@ -26,7 +34,7 @@ export interface ExecBufferResult {
 export function exec(
   command: string,
   args: string[],
-  options?: { timeout?: number; cwd?: string },
+  options?: ExecOptions,
 ): Promise<ExecResult> {
   return new Promise((resolve, reject) => {
     execFile(
@@ -35,6 +43,7 @@ export function exec(
       {
         encoding: "utf-8",
         timeout: options?.timeout ?? DEFAULT_TIMEOUT,
+        maxBuffer: options?.maxBuffer ?? DEFAULT_MAX_BUFFER,
         cwd: options?.cwd,
       },
       (error, stdout, stderr) => {
@@ -62,7 +71,7 @@ export function exec(
 export function execBuffer(
   command: string,
   args: string[],
-  options?: { timeout?: number; cwd?: string },
+  options?: ExecOptions,
 ): Promise<ExecBufferResult> {
   return new Promise((resolve, reject) => {
     execFile(
@@ -71,6 +80,7 @@ export function execBuffer(
       {
         encoding: "buffer",
         timeout: options?.timeout ?? DEFAULT_TIMEOUT,
+        maxBuffer: options?.maxBuffer ?? DEFAULT_MAX_BUFFER_BINARY,
         cwd: options?.cwd,
       },
       (error, stdout, stderr) => {

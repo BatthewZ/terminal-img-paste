@@ -192,6 +192,38 @@ describe("util/exec", () => {
       expect(result.stdout).toBe("");
       expect(result.stderr).toBe("");
     });
+
+    it("uses the default maxBuffer of 10MB when none is provided", async () => {
+      mockedExecFile.mockImplementation(
+        ((_cmd: any, _args: any, _opts: any, cb: any) => {
+          cb(null, "", "");
+        }) as any,
+      );
+
+      await exec("cmd", []);
+      expect(mockedExecFile).toHaveBeenCalledWith(
+        "cmd",
+        [],
+        expect.objectContaining({ maxBuffer: 10 * 1024 * 1024 }),
+        expect.any(Function),
+      );
+    });
+
+    it("passes through a custom maxBuffer", async () => {
+      mockedExecFile.mockImplementation(
+        ((_cmd: any, _args: any, _opts: any, cb: any) => {
+          cb(null, "", "");
+        }) as any,
+      );
+
+      await exec("cmd", [], { maxBuffer: 2 * 1024 * 1024 });
+      expect(mockedExecFile).toHaveBeenCalledWith(
+        "cmd",
+        [],
+        expect.objectContaining({ maxBuffer: 2 * 1024 * 1024 }),
+        expect.any(Function),
+      );
+    });
   });
 
   // -----------------------------------------------------------------------
@@ -392,6 +424,38 @@ describe("util/exec", () => {
 
       const result = await execBuffer("cmd", []);
       expect(result.stderr).toBe("utf-8 encoded warning: \u00e9\u00e0\u00fc");
+    });
+
+    it("uses the default maxBuffer of 50MB when none is provided", async () => {
+      mockedExecFile.mockImplementation(
+        ((_cmd: any, _args: any, _opts: any, cb: any) => {
+          cb(null, Buffer.alloc(0), Buffer.alloc(0));
+        }) as any,
+      );
+
+      await execBuffer("cmd", []);
+      expect(mockedExecFile).toHaveBeenCalledWith(
+        "cmd",
+        [],
+        expect.objectContaining({ maxBuffer: 50 * 1024 * 1024 }),
+        expect.any(Function),
+      );
+    });
+
+    it("passes through a custom maxBuffer", async () => {
+      mockedExecFile.mockImplementation(
+        ((_cmd: any, _args: any, _opts: any, cb: any) => {
+          cb(null, Buffer.alloc(0), Buffer.alloc(0));
+        }) as any,
+      );
+
+      await execBuffer("cmd", [], { maxBuffer: 100 * 1024 * 1024 });
+      expect(mockedExecFile).toHaveBeenCalledWith(
+        "cmd",
+        [],
+        expect.objectContaining({ maxBuffer: 100 * 1024 * 1024 }),
+        expect.any(Function),
+      );
     });
   });
 });
