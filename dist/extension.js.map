@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../src/extension.ts"],
+  "sourcesContent": ["import * as vscode from 'vscode';\n\nexport function activate(context: vscode.ExtensionContext): void {\n  const pasteImageDisposable = vscode.commands.registerCommand(\n    'terminalImgPaste.pasteImage',\n    async () => {\n      vscode.window.showInformationMessage('Paste Image command \u2014 not yet implemented.');\n    }\n  );\n\n  const sendPathDisposable = vscode.commands.registerCommand(\n    'terminalImgPaste.sendPathToTerminal',\n    async (uri: vscode.Uri) => {\n      vscode.window.showInformationMessage(\n        `Send Path command \u2014 not yet implemented. URI: ${uri?.fsPath ?? 'none'}`\n      );\n    }\n  );\n\n  context.subscriptions.push(pasteImageDisposable, sendPathDisposable);\n}\n\nexport function deactivate(): void {\n  // Cleanup will be handled here in future phases\n}\n"],
+  "mappings": "0jBAAA,IAAAA,EAAA,GAAAC,EAAAD,EAAA,cAAAE,EAAA,eAAAC,IAAA,eAAAC,EAAAJ,GAAA,IAAAK,EAAwB,qBAEjB,SAASH,EAASI,EAAwC,CAC/D,IAAMC,EAA8B,WAAS,gBAC3C,8BACA,SAAY,CACH,SAAO,uBAAuB,iDAA4C,CACnF,CACF,EAEMC,EAA4B,WAAS,gBACzC,sCACA,MAAOC,GAAoB,CAClB,SAAO,uBACZ,sDAAiDA,GAAK,QAAU,MAAM,EACxE,CACF,CACF,EAEAH,EAAQ,cAAc,KAAKC,EAAsBC,CAAkB,CACrE,CAEO,SAASL,GAAmB,CAEnC",
+  "names": ["extension_exports", "__export", "activate", "deactivate", "__toCommonJS", "vscode", "context", "pasteImageDisposable", "sendPathDisposable", "uri"]
+}

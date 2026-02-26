@@ -1,0 +1,106 @@
+{
+  "name": "terminal-img-paste",
+  "displayName": "Terminal Image Paste",
+  "description": "Paste clipboard images into VS Code terminal as file paths — works with CLI tools like Claude Code that accept image paths",
+  "version": "0.0.1",
+  "publisher": "terminal-img-paste",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "terminalImgPaste.pasteImage",
+        "title": "Paste Clipboard Image to Terminal"
+      },
+      {
+        "command": "terminalImgPaste.sendPathToTerminal",
+        "title": "Send Image Path to Terminal"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "terminalImgPaste.pasteImage",
+        "key": "ctrl+alt+v",
+        "mac": "cmd+alt+v",
+        "when": "terminalFocus"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "terminalImgPaste.sendPathToTerminal",
+          "when": "resourceExtname =~ /\\.(png|jpg|jpeg|gif|bmp|webp|svg)/i"
+        }
+      ]
+    },
+    "views": {
+      "terminalImgPaste": [
+        {
+          "id": "terminalImgPaste.dropZone",
+          "name": "Drop Zone",
+          "type": "webview"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "terminalImgPaste",
+          "title": "Image Paste",
+          "icon": "assets/icon.svg"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Terminal Image Paste",
+      "properties": {
+        "terminalImgPaste.folderName": {
+          "type": "string",
+          "default": ".tip-images",
+          "description": "Image storage folder relative to workspace"
+        },
+        "terminalImgPaste.maxImages": {
+          "type": "number",
+          "default": 20,
+          "description": "Auto-delete oldest images beyond this count"
+        },
+        "terminalImgPaste.autoGitIgnore": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically add image folder to .gitignore"
+        },
+        "terminalImgPaste.sendNewline": {
+          "type": "boolean",
+          "default": false,
+          "description": "Auto-press Enter after inserting path into terminal"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "node esbuild.js",
+    "watch": "node esbuild.js --watch",
+    "lint": "eslint src/",
+    "test": "vitest run",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.0.0",
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^3.0.0",
+    "esbuild": "^0.24.0",
+    "eslint": "^9.0.0",
+    "typescript": "^5.5.0",
+    "typescript-eslint": "^8.0.0",
+    "vitest": "^2.0.0"
+  }
+}
