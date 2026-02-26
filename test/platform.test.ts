@@ -13,6 +13,7 @@ async function loadDetectPlatform() {
 describe("platform/detect", () => {
   const originalPlatform = process.platform;
   let originalXDGSessionType: string | undefined;
+  let originalWaylandDisplay: string | undefined;
 
   beforeEach(() => {
     // Clear the module cache so the module-level `cached` variable is reset
@@ -21,16 +22,22 @@ describe("platform/detect", () => {
     // Restore process.platform after each test
     Object.defineProperty(process, "platform", { value: originalPlatform });
 
-    // Save and restore XDG_SESSION_TYPE
+    // Save and restore XDG_SESSION_TYPE and WAYLAND_DISPLAY
     originalXDGSessionType = process.env.XDG_SESSION_TYPE;
+    originalWaylandDisplay = process.env.WAYLAND_DISPLAY;
   });
 
   afterEach(() => {
-    // Restore env var
+    // Restore env vars
     if (originalXDGSessionType === undefined) {
       delete process.env.XDG_SESSION_TYPE;
     } else {
       process.env.XDG_SESSION_TYPE = originalXDGSessionType;
+    }
+    if (originalWaylandDisplay === undefined) {
+      delete process.env.WAYLAND_DISPLAY;
+    } else {
+      process.env.WAYLAND_DISPLAY = originalWaylandDisplay;
     }
   });
 
@@ -195,9 +202,10 @@ describe("platform/detect", () => {
       expect(info.displayServer).toBe("x11");
     });
 
-    it("returns 'unknown' when XDG_SESSION_TYPE is unset on linux", async () => {
+    it("returns 'unknown' when XDG_SESSION_TYPE and WAYLAND_DISPLAY are both unset on linux", async () => {
       Object.defineProperty(process, "platform", { value: "linux" });
       delete process.env.XDG_SESSION_TYPE;
+      delete process.env.WAYLAND_DISPLAY;
       const { readFileSync, existsSync } = await import("fs");
       vi.mocked(readFileSync).mockReturnValue("Linux version 6.6.0-generic");
       vi.mocked(existsSync).mockReturnValue(false);
@@ -210,6 +218,7 @@ describe("platform/detect", () => {
     it("returns 'unknown' when XDG_SESSION_TYPE is something else", async () => {
       Object.defineProperty(process, "platform", { value: "linux" });
       process.env.XDG_SESSION_TYPE = "tty";
+      delete process.env.WAYLAND_DISPLAY;
       const { readFileSync, existsSync } = await import("fs");
       vi.mocked(readFileSync).mockReturnValue("Linux version 6.6.0-generic");
       vi.mocked(existsSync).mockReturnValue(false);
@@ -244,6 +253,48 @@ describe("platform/detect", () => {
     it("returns 'unknown' on WSL even if XDG_SESSION_TYPE is set", async () => {
       Object.defineProperty(process, "platform", { value: "linux" });
       process.env.XDG_SESSION_TYPE = "x11";
+      const { readFileSync, existsSync } = await import("fs");
+      vi.mocked(readFileSync).mockReturnValue(
+        "Linux version 5.15.153.1-microsoft-standard-WSL2",
+      );
+      vi.mocked(existsSync).mockReturnValue(false);
+
+      const detectPlatform = await loadDetectPlatform();
+      const info = detectPlatform();
+      expect(info.isWSL).toBe(true);
+      expect(info.displayServer).toBe("unknown");
+    });
+
+    it("returns 'wayland' when XDG_SESSION_TYPE is unset but WAYLAND_DISPLAY is set", async () => {
+      Object.defineProperty(process, "platform", { value: "linux" });
+      delete process.env.XDG_SESSION_TYPE;
+      process.env.WAYLAND_DISPLAY = "wayland-0";
+      const { readFileSync, existsSync } = await import("fs");
+      vi.mocked(readFileSync).mockReturnValue("Linux version 6.6.0-generic");
+      vi.mocked(existsSync).mockReturnValue(false);
+
+      const detectPlatform = await loadDetectPlatform();
+      const info = detectPlatform();
+      expect(info.displayServer).toBe("wayland");
+    });
+
+    it("prefers XDG_SESSION_TYPE=x11 over WAYLAND_DISPLAY", async () => {
+      Object.defineProperty(process, "platform", { value: "linux" });
+      process.env.XDG_SESSION_TYPE = "x11";
+      process.env.WAYLAND_DISPLAY = "wayland-0";
+      const { readFileSync, existsSync } = await import("fs");
+      vi.mocked(readFileSync).mockReturnValue("Linux version 6.6.0-generic");
+      vi.mocked(existsSync).mockReturnValue(false);
+
+      const detectPlatform = await loadDetectPlatform();
+      const info = detectPlatform();
+      expect(info.displayServer).toBe("x11");
+    });
+
+    it("ignores WAYLAND_DISPLAY on WSL", async () => {
+      Object.defineProperty(process, "platform", { value: "linux" });
+      delete process.env.XDG_SESSION_TYPE;
+      process.env.WAYLAND_DISPLAY = "wayland-0";
       const { readFileSync, existsSync } = await import("fs");
       vi.mocked(readFileSync).mockReturnValue(
         "Linux version 5.15.153.1-microsoft-standard-WSL2",
@@ -426,9 +477,28 @@ describe("platform/detect", () => {
       });
     });
 
+    it("returns a complete PlatformInfo object for native linux with WAYLAND_DISPLAY fallback", async () => {
+      Object.defineProperty(process, "platform", { value: "linux" });
+      delete process.env.XDG_SESSION_TYPE;
+      process.env.WAYLAND_DISPLAY = "wayland-0";
+      const { readFileSync, existsSync } = await import("fs");
+      vi.mocked(readFileSync).mockReturnValue("Linux version 6.6.0-generic");
+      vi.mocked(existsSync).mockReturnValue(false);
+
+      const detectPlatform = await loadDetectPlatform();
+      const info: PlatformInfo = detectPlatform();
+      expect(info).toEqual({
+        os: "linux",
+        isWSL: false,
+        displayServer: "wayland",
+        powershellPath: null,
+      });
+    });
+
     it("returns a complete PlatformInfo object for WSL", async () => {
       Object.defineProperty(process, "platform", { value: "linux" });
       delete process.env.XDG_SESSION_TYPE;
+      delete process.env.WAYLAND_DISPLAY;
       const { readFileSync, existsSync } = await import("fs");
       vi.mocked(readFileSync).mockReturnValue(
         "Linux version 5.15.153.1-microsoft-standard-WSL2",

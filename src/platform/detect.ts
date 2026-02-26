@@ -46,6 +46,12 @@ function detectDisplayServer(
     return "x11";
   }
 
+  // Fallback: WAYLAND_DISPLAY is set by Wayland compositors even when
+  // XDG_SESSION_TYPE is absent (containers, some desktop environments, etc.)
+  if (process.env.WAYLAND_DISPLAY) {
+    return "wayland";
+  }
+
   return "unknown";
 }
 
