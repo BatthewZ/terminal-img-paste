@@ -22,7 +22,7 @@ export interface ImageStore {
 const DEFAULT_FOLDER_NAME = '.tip-images';
 
 /** All image file extensions managed by this store. */
-export const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.tiff', '.bmp', '.webp'];
+export const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.tiff', '.tif', '.bmp', '.webp', '.gif'];
 
 /** Map from ClipboardFormat to file extension. */
 function formatToExtension(format: ClipboardFormat): string {
@@ -35,6 +35,8 @@ function formatToExtension(format: ClipboardFormat): string {
       return '.bmp';
     case 'webp':
       return '.webp';
+    case 'gif':
+      return '.gif';
     case 'png':
     case 'unknown':
     default:
@@ -81,6 +83,11 @@ function validateImage(buffer: Buffer, format: ClipboardFormat): void {
         )
       ) {
         throw new Error('Clipboard data is not a valid TIFF image');
+      }
+      break;
+    case 'gif':
+      if (buffer.length < 3 || buffer.subarray(0, 3).toString('ascii') !== 'GIF') {
+        throw new Error('Clipboard data is not a valid GIF image');
       }
       break;
     case 'unknown':

@@ -4,6 +4,7 @@ export type ClipboardFormat =
   | "tiff"
   | "bmp"
   | "webp"
+  | "gif"
   | "unknown";
 
 export interface ClipboardImageResult {

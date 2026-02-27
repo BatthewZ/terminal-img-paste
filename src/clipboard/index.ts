@@ -6,6 +6,12 @@ import { LinuxClipboardReader } from "./linuxClipboard";
 import { WindowsClipboardReader } from "./windowsClipboard";
 import { WslClipboardReader } from "./wslClipboard";
 import { FallbackClipboardReader } from "./fallback";
+import {
+  LinuxFilePathReader,
+  WindowsFilePathReader,
+  WslFilePathReader,
+  MacosFilePathReader,
+} from "./filePathClipboard";
 
 export { ClipboardReader } from "./types";
 
@@ -21,6 +27,8 @@ export function createClipboardReader(platform: PlatformInfo): ClipboardReader {
       return new FallbackClipboardReader([
         new LinuxClipboardReader(platform.displayServer),
         new WslClipboardReader(platform),
+        new LinuxFilePathReader(platform.displayServer),
+        new WslFilePathReader(platform),
       ]);
     }
 
@@ -28,10 +36,13 @@ export function createClipboardReader(platform: PlatformInfo): ClipboardReader {
     if (hasDisplayServer) {
       readers.push(new LinuxClipboardReader(platform.displayServer));
     }
+    // File-path readers always go last in the chain
+    readers.push(new WslFilePathReader(platform));
+    if (hasDisplayServer) {
+      readers.push(new LinuxFilePathReader(platform.displayServer));
+    }
 
-    return readers.length === 1
-      ? readers[0]
-      : new FallbackClipboardReader(readers);
+    return new FallbackClipboardReader(readers);
   }
 
   switch (platform.os) {
@@ -39,15 +50,23 @@ export function createClipboardReader(platform: PlatformInfo): ClipboardReader {
       return new FallbackClipboardReader([
         new MacosClipboardReader(),
         new MacosOsascriptClipboardReader(),
+        new MacosFilePathReader(),
       ]);
     case "windows":
-      return new WindowsClipboardReader();
+      return new FallbackClipboardReader([
+        new WindowsClipboardReader(),
+        new WindowsFilePathReader(),
+      ]);
     case "linux": {
       const primary = new LinuxClipboardReader(platform.displayServer);
       const fallbackDS =
         platform.displayServer === "wayland" ? "x11" : "wayland";
       const fallback = new LinuxClipboardReader(fallbackDS);
-      return new FallbackClipboardReader([primary, fallback]);
+      return new FallbackClipboardReader([
+        primary,
+        fallback,
+        new LinuxFilePathReader(platform.displayServer),
+      ]);
     }
   }
 }

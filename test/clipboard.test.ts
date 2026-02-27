@@ -102,16 +102,22 @@ describe("createClipboardReader", () => {
     expect(reader.requiredTool()).toContain("xclip");
   });
 
-  it("returns WindowsClipboardReader for Windows (no fallback)", () => {
+  it("returns FallbackClipboardReader for Windows with file-path reader", () => {
     const reader = createClipboardReader(makePlatform({ os: "windows" }));
-    expect(reader).toBeInstanceOf(WindowsClipboardReader);
+    expect(reader).toBeInstanceOf(FallbackClipboardReader);
+    const tool = reader.requiredTool();
+    expect(tool).toContain("PowerShell (built-in)");
+    expect(tool).toContain("[file paths]");
   });
 
-  it("returns plain WslClipboardReader when isWSL is true without display server", () => {
+  it("returns FallbackClipboardReader when isWSL is true without display server (with file-path reader)", () => {
     const reader = createClipboardReader(
       makePlatform({ os: "linux", isWSL: true, displayServer: "unknown", powershellPath: "/mnt/c/ps.exe" }),
     );
-    expect(reader).toBeInstanceOf(WslClipboardReader);
+    expect(reader).toBeInstanceOf(FallbackClipboardReader);
+    const tool = reader.requiredTool();
+    expect(tool).toContain("PowerShell (via WSL interop)");
+    expect(tool).toContain("[file paths]");
   });
 
   it("returns FallbackClipboardReader for WSL with display server but no WSLg (PowerShell first)", () => {
@@ -158,12 +164,15 @@ describe("createClipboardReader", () => {
     );
   });
 
-  it("returns plain WslClipboardReader for WSLg without display server", () => {
+  it("returns FallbackClipboardReader for WSLg without display server (with file-path reader)", () => {
     // WSLg detected but no DISPLAY/WAYLAND_DISPLAY set (unusual but possible)
     const reader = createClipboardReader(
       makePlatform({ os: "linux", isWSL: true, hasWslg: true, displayServer: "unknown", powershellPath: "/mnt/c/ps.exe" }),
     );
-    expect(reader).toBeInstanceOf(WslClipboardReader);
+    expect(reader).toBeInstanceOf(FallbackClipboardReader);
+    const tool = reader.requiredTool();
+    expect(tool).toContain("PowerShell (via WSL interop)");
+    expect(tool).toContain("[file paths]");
   });
 });
 

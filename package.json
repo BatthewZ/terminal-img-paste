@@ -41,6 +41,13 @@
           "title": "Terminal Image Paste",
           "icon": "assets/icon.png"
         }
+      ],
+      "panel": [
+        {
+          "id": "terminalImgPastePanel",
+          "title": "Image Drop",
+          "icon": "assets/icon.png"
+        }
       ]
     },
     "views": {
@@ -48,6 +55,13 @@
         {
           "type": "webview",
           "id": "terminalImgPaste.dropZone",
+          "name": "Drop Zone"
+        }
+      ],
+      "terminalImgPastePanel": [
+        {
+          "type": "webview",
+          "id": "terminalImgPaste.panelDropZone",
           "name": "Drop Zone"
         }
       ]

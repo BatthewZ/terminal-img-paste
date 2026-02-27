@@ -126,13 +126,14 @@ export function activate(context: vscode.ExtensionContext): TerminalImgPasteApi 
     () => runDiagnostics(platform, reader),
   );
 
-  const dropZoneProvider = new DropZoneProvider(context.extensionUri, imageStore, pasteEmitter, pasteMutex);
-  const dropZoneDisposable = vscode.window.registerWebviewViewProvider(
-    'terminalImgPaste.dropZone',
-    dropZoneProvider,
-  );
+  for (const viewId of ['terminalImgPaste.dropZone', 'terminalImgPaste.panelDropZone']) {
+    const provider = new DropZoneProvider(context.extensionUri, imageStore, pasteEmitter, pasteMutex);
+    context.subscriptions.push(
+      vscode.window.registerWebviewViewProvider(viewId, provider),
+    );
+  }
 
-  context.subscriptions.push(pasteImageDisposable, sendPathDisposable, diagnosticsDisposable, dropZoneDisposable);
+  context.subscriptions.push(pasteImageDisposable, sendPathDisposable, diagnosticsDisposable);
   logger.info(`Extension activated (platform: ${platform.os}, WSL: ${platform.isWSL})`);
 
   return createApi(platform, reader, imageStore, pasteEmitter);

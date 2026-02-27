@@ -6,6 +6,7 @@ node_modules/**
 swarm/**
 .github/**
 .claude/**
+.tip-images/**
 .gitignore
 tsconfig.json
 esbuild.js
@@ -13,4 +14,8 @@ eslint.config.mjs
 vitest.config.ts
 vitest.integration.config.ts
 CLAUDE.md
+AGENTS.md
+confusion-logs.md
+bun.lock
 **/*.map
+docs/**/*.md

@@ -1,4 +1,7 @@
 node_modules/
+dist/
+*.vsix
 .env
 .playwright-cli
 .claude/worktrees/
+.tip-images

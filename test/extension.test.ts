@@ -140,8 +140,8 @@ describe('activate', () => {
   it('pushes all disposables to context.subscriptions', () => {
     const ctx = makeContext();
     activate(ctx);
-    // 3 command disposables + 1 EventEmitter (pasteEmitter) + 1 dropZone view provider
-    expect(ctx.subscriptions).toHaveLength(5);
+    // 3 command disposables + 1 EventEmitter (pasteEmitter) + 2 dropZone view providers (sidebar + panel)
+    expect(ctx.subscriptions).toHaveLength(6);
   });
 
   it('returns API object with all expected methods', () => {
