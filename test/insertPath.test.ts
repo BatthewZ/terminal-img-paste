@@ -5,8 +5,13 @@ vi.mock('../src/util/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), show: vi.fn() },
 }));
 
-import { insertPathToTerminal } from '../src/terminal/insertPath';
+vi.mock('../src/terminal/shellDetect', () => ({
+  detectShellType: vi.fn(() => 'bash'),
+}));
+
+import { insertPathToTerminal, quotePath } from '../src/terminal/insertPath';
 import { logger } from '../src/util/logger';
+import { detectShellType } from '../src/terminal/shellDetect';
 
 // ---------------------------------------------------------------------------
 // Test-local config store (mirrors the pattern in imageStore.test.ts)
@@ -24,7 +29,7 @@ function setConfig(key: string, value: unknown): void {
 /** Re-establish the vscode mocks after vitest's mockReset clears them. */
 function setupVscodeMock(hasTerminal = true): void {
   if (hasTerminal) {
-    (window as any).activeTerminal = { sendText: vi.fn() };
+    (window as any).activeTerminal = { sendText: vi.fn(), creationOptions: {} };
   } else {
     (window as any).activeTerminal = undefined;
   }
@@ -43,13 +48,103 @@ beforeEach(() => {
   vi.restoreAllMocks();
   resetConfig();
   setupVscodeMock();
+  // Default to bash for existing tests
+  vi.mocked(detectShellType).mockReturnValue('bash');
 });
 
 // ---------------------------------------------------------------------------
-// Tests
+// quotePath unit tests
+// ---------------------------------------------------------------------------
+describe('quotePath', () => {
+  // -- bash / zsh -----------------------------------------------------------
+  describe('bash/zsh', () => {
+    it('single-quotes a simple path', () => {
+      expect(quotePath('/home/user/img.png', 'bash')).toBe("'/home/user/img.png'");
+    });
+
+    it('preserves spaces inside single quotes', () => {
+      expect(quotePath('/home/user/my images/img.png', 'bash')).toBe("'/home/user/my images/img.png'");
+    });
+
+    it("escapes embedded single quotes with '\\''", () => {
+      expect(quotePath("/home/it's here/img.png", 'bash')).toBe("'/home/it'\\''s here/img.png'");
+    });
+
+    it('keeps $, backticks, and ! safe inside single quotes', () => {
+      expect(quotePath('/home/$HOME`whoami`!(test)', 'bash')).toBe("'/home/$HOME`whoami`!(test)'");
+    });
+
+    it('zsh uses same quoting as bash', () => {
+      expect(quotePath("/it's a test", 'zsh')).toBe(quotePath("/it's a test", 'bash'));
+    });
+  });
+
+  // -- fish -----------------------------------------------------------------
+  describe('fish', () => {
+    it('single-quotes a simple path', () => {
+      expect(quotePath('/home/user/img.png', 'fish')).toBe("'/home/user/img.png'");
+    });
+
+    it("escapes single quotes with \\' (not '\\'')", () => {
+      expect(quotePath("/home/it's here/img.png", 'fish')).toBe("'/home/it\\'s here/img.png'");
+    });
+
+    it('escapes backslashes', () => {
+      expect(quotePath('/home/user\\dir/img.png', 'fish')).toBe("'/home/user\\\\dir/img.png'");
+    });
+  });
+
+  // -- powershell -----------------------------------------------------------
+  describe('powershell', () => {
+    it('double-quotes a simple path', () => {
+      expect(quotePath('/home/user/img.png', 'powershell')).toBe('"/home/user/img.png"');
+    });
+
+    it('handles path with single quotes (no escape needed)', () => {
+      expect(quotePath("/home/it's here/img.png", 'powershell')).toBe("\"/home/it's here/img.png\"");
+    });
+
+    it('escapes $ with `$', () => {
+      expect(quotePath('/home/$var/img.png', 'powershell')).toBe('"/home/`$var/img.png"');
+    });
+
+    it('escapes backticks with ``', () => {
+      expect(quotePath('/home/`tick/img.png', 'powershell')).toBe('"/home/``tick/img.png"');
+    });
+
+    it('escapes double quotes with `"', () => {
+      expect(quotePath('/home/"quoted"/img.png', 'powershell')).toBe('"/home/`"quoted`"/img.png"');
+    });
+  });
+
+  // -- cmd ------------------------------------------------------------------
+  describe('cmd', () => {
+    it('double-quotes a simple path', () => {
+      expect(quotePath('/home/user/img.png', 'cmd')).toBe('"/home/user/img.png"');
+    });
+
+    it('escapes % with %%', () => {
+      expect(quotePath('/home/%VAR%/img.png', 'cmd')).toBe('"/home/%%VAR%%/img.png"');
+    });
+
+    it('escapes double quotes with ""', () => {
+      expect(quotePath('/home/"quoted"/img.png', 'cmd')).toBe('"/home/""quoted""/img.png"');
+    });
+  });
+
+  // -- unknown --------------------------------------------------------------
+  describe('unknown', () => {
+    it('falls back to bash-style quoting', () => {
+      expect(quotePath("/it's a test", 'unknown')).toBe(quotePath("/it's a test", 'bash'));
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// insertPathToTerminal integration tests
 // ---------------------------------------------------------------------------
 describe('insertPathToTerminal', () => {
-  // -- Path quoting --------------------------------------------------------
+  // -- Path quoting (existing tests, still pass with bash default) ----------
 
   it('single-quotes a simple path', () => {
     insertPathToTerminal('/home/user/img.png');
@@ -150,7 +245,41 @@ describe('insertPathToTerminal', () => {
   it('logs the quoted path via logger.info', () => {
     insertPathToTerminal('/home/user/img.png');
     expect(logger.info).toHaveBeenCalledWith(
-      "Inserted path into terminal: '/home/user/img.png'",
+      "Inserted path into terminal (bash): '/home/user/img.png'",
     );
+  });
+
+  // -- Shell-aware integration tests ----------------------------------------
+
+  it('uses fish quoting when shell is fish', () => {
+    vi.mocked(detectShellType).mockReturnValue('fish');
+    insertPathToTerminal("/home/it's here/img.png");
+    expect(window.activeTerminal!.sendText).toHaveBeenCalledWith(
+      "'/home/it\\'s here/img.png'",
+      false,
+    );
+  });
+
+  it('uses powershell quoting when shell is powershell', () => {
+    vi.mocked(detectShellType).mockReturnValue('powershell');
+    insertPathToTerminal('/home/$var/img.png');
+    expect(window.activeTerminal!.sendText).toHaveBeenCalledWith(
+      '"/home/`$var/img.png"',
+      false,
+    );
+  });
+
+  it('uses cmd quoting when shell is cmd', () => {
+    vi.mocked(detectShellType).mockReturnValue('cmd');
+    insertPathToTerminal('/home/%VAR%/img.png');
+    expect(window.activeTerminal!.sendText).toHaveBeenCalledWith(
+      '"/home/%%VAR%%/img.png"',
+      false,
+    );
+  });
+
+  it('calls detectShellType with the active terminal', () => {
+    insertPathToTerminal('/tmp/img.png');
+    expect(detectShellType).toHaveBeenCalledWith(window.activeTerminal);
   });
 });

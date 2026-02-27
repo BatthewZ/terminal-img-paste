@@ -1,5 +1,5 @@
 import * as fs from "fs";
-import { ClipboardReader, ClipboardFormat } from "./types";
+import { ClipboardReader, ClipboardFormat, ClipboardImageResult } from "./types";
 import { exec } from "../util/exec";
 import { logger } from "../util/logger";
 
@@ -52,7 +52,7 @@ export abstract class PowerShellClipboardReader implements ClipboardReader {
     return "png";
   }
 
-  async readImage(): Promise<Buffer> {
+  async readImage(): Promise<ClipboardImageResult> {
     const has = await this.hasImage();
     if (!has) {
       throw new Error("No image found in clipboard");
@@ -65,7 +65,8 @@ export abstract class PowerShellClipboardReader implements ClipboardReader {
 
     const localPath = await this.resolveTempPath(result.stdout.trim());
     try {
-      return await fs.promises.readFile(localPath);
+      const data = await fs.promises.readFile(localPath);
+      return { data, format: "png" };
     } finally {
       fs.promises.unlink(localPath).catch((err) => {
         logger.warn(`Failed to clean up temp file: ${localPath}`, err);

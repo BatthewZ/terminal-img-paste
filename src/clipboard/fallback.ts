@@ -1,4 +1,4 @@
-import { ClipboardReader, ClipboardFormat } from "./types";
+import { ClipboardReader, ClipboardFormat, ClipboardImageResult } from "./types";
 
 /**
  * Tries each reader in order. The first reader whose operation succeeds wins.
@@ -55,7 +55,7 @@ export class FallbackClipboardReader implements ClipboardReader {
     );
   }
 
-  async readImage(): Promise<Buffer> {
+  async readImage(): Promise<ClipboardImageResult> {
     const errors: Error[] = [];
     for (const reader of this.readers) {
       try {

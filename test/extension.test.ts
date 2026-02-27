@@ -52,13 +52,13 @@ function makeContext() {
 function makeMockReader(overrides: Partial<{
   isToolAvailable: () => Promise<boolean>;
   hasImage: () => Promise<boolean>;
-  readImage: () => Promise<Buffer>;
+  readImage: () => Promise<{ data: Buffer; format: string }>;
   requiredTool: () => string;
 }> = {}) {
   return {
     isToolAvailable: overrides.isToolAvailable ?? vi.fn().mockResolvedValue(true),
     hasImage: overrides.hasImage ?? vi.fn().mockResolvedValue(true),
-    readImage: overrides.readImage ?? vi.fn().mockResolvedValue(Buffer.from('PNG')),
+    readImage: overrides.readImage ?? vi.fn().mockResolvedValue({ data: Buffer.from('PNG'), format: 'png' }),
     requiredTool: overrides.requiredTool ?? vi.fn().mockReturnValue('xclip'),
   };
 }
@@ -174,7 +174,7 @@ describe('pasteImage command handler', () => {
     expect(reader.isToolAvailable).toHaveBeenCalled();
     expect(reader.hasImage).toHaveBeenCalled();
     expect(reader.readImage).toHaveBeenCalled();
-    expect(store.save).toHaveBeenCalledWith(Buffer.from('PNG'));
+    expect(store.save).toHaveBeenCalledWith(Buffer.from('PNG'), 'png');
     expect(insertPathToTerminal).toHaveBeenCalledWith(
       '/test/workspace/.tip-images/img.png',
     );
@@ -267,7 +267,7 @@ describe('pasteImage command handler', () => {
         // Simulate some async work
         await new Promise((r) => setTimeout(r, 10));
         order.push(n);
-        return Buffer.from('PNG');
+        return { data: Buffer.from('PNG'), format: 'png' };
       }),
     });
     vi.mocked(createClipboardReader).mockReturnValue(reader as any);
@@ -297,7 +297,7 @@ describe('pasteImage command handler', () => {
     await handler();
 
     // Reset readImage to succeed on second call
-    vi.mocked(reader.readImage).mockResolvedValueOnce(Buffer.from('PNG2'));
+    vi.mocked(reader.readImage).mockResolvedValueOnce({ data: Buffer.from('PNG2'), format: 'png' } as any);
 
     // Second call should succeed (mutex was released)
     await handler();

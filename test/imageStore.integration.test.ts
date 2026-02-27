@@ -148,6 +148,40 @@ describe('imageStore integration (real fs)', () => {
     expect(content).toContain('.tip-images');
   });
 
+  it('save with jpeg format writes a .jpg file', async () => {
+    const store = createImageStore();
+    const jpegData = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]);
+    const filePath = await store.save(jpegData, 'jpeg');
+
+    expect(filePath).toMatch(/\.jpg$/);
+    expect(path.isAbsolute(filePath)).toBe(true);
+    expect(fs.existsSync(filePath)).toBe(true);
+    const contents = fs.readFileSync(filePath);
+    expect(contents).toEqual(jpegData);
+  });
+
+  it('cleanup includes non-png image files in count', async () => {
+    setConfig('maxImages', 2);
+    const store = createImageStore();
+
+    const imageDir = path.join(tmpDir, '.tip-images');
+    fs.mkdirSync(imageDir, { recursive: true });
+    fs.writeFileSync(path.join(imageDir, 'img-2026-01-01T00-00-00-000.jpg'), 'old-jpeg');
+    fs.writeFileSync(path.join(imageDir, 'img-2026-01-02T00-00-00-000.webp'), 'old-webp');
+    fs.writeFileSync(path.join(imageDir, 'img-2026-01-03T00-00-00-000.png'), 'newer-png');
+
+    // Save one more → 4 image files total, maxImages=2 → delete 2 oldest
+    await store.save(fakePng('newest'));
+
+    const remaining = fs.readdirSync(imageDir);
+    const imageFiles = remaining.filter((f) =>
+      ['.png', '.jpg', '.jpeg', '.tiff', '.bmp', '.webp'].some((ext) => f.endsWith(ext)),
+    );
+    expect(imageFiles).toHaveLength(2);
+    expect(fs.existsSync(path.join(imageDir, 'img-2026-01-01T00-00-00-000.jpg'))).toBe(false);
+    expect(fs.existsSync(path.join(imageDir, 'img-2026-01-02T00-00-00-000.webp'))).toBe(false);
+  });
+
   it('consecutive saves generate distinct filenames', async () => {
     const store = createImageStore();
     const path1 = await store.save(fakePng('img1'));

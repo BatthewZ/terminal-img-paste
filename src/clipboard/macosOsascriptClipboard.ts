@@ -1,6 +1,13 @@
-import { ClipboardReader, ClipboardFormat } from "./types";
-import { exec, execBuffer } from "../util/exec";
-import { parseClipboardFormats } from "./macosClipboard";
+import { ClipboardReader, ClipboardFormat, ClipboardImageResult } from "./types";
+import { execBuffer } from "../util/exec";
+import { getClipboardInfo, parseClipboardFormats } from "./macosClipboard";
+
+/** Map from ClipboardFormat to the osascript class name used for clipboard coercion. */
+const FORMAT_TO_OSASCRIPT_CLASS: Record<string, string> = {
+  png: "PNGf",
+  jpeg: "JPEG",
+  tiff: "TIFF",
+};
 
 /**
  * macOS clipboard reader using only osascript.
@@ -15,14 +22,9 @@ export class MacosOsascriptClipboardReader implements ClipboardReader {
     return process.platform === "darwin";
   }
 
-  private async getClipboardInfo(): Promise<string> {
-    const { stdout } = await exec("osascript", ["-e", "clipboard info"]);
-    return stdout;
-  }
-
   async hasImage(): Promise<boolean> {
     try {
-      const info = await this.getClipboardInfo();
+      const info = await getClipboardInfo();
       return parseClipboardFormats(info).length > 0;
     } catch {
       return false;
@@ -30,24 +32,26 @@ export class MacosOsascriptClipboardReader implements ClipboardReader {
   }
 
   async detectFormat(): Promise<ClipboardFormat> {
-    const has = await this.hasImage();
-    if (!has) {
-      throw new Error("No image found in clipboard");
+    const info = await getClipboardInfo();
+    const formats = parseClipboardFormats(info);
+    if (formats.length > 0) {
+      return formats[0];
     }
-    return "png";
+    throw new Error("No image found in clipboard");
   }
 
-  async readImage(): Promise<Buffer> {
-    const has = await this.hasImage();
-    if (!has) {
-      throw new Error("No image found in clipboard");
-    }
+  async readImage(): Promise<ClipboardImageResult> {
+    const format = await this.detectFormat();
+    const hasNativeClass = format in FORMAT_TO_OSASCRIPT_CLASS;
+    const osClass = hasNativeClass ? FORMAT_TO_OSASCRIPT_CLASS[format] : "PNGf";
+    const resolvedFormat = hasNativeClass ? format : "png";
+
     const { stdout } = await execBuffer("osascript", [
       "-e",
-      "set pngData to (the clipboard as «class PNGf»)",
+      `set imgData to (the clipboard as «class ${osClass}»)`,
       "-e",
-      "return pngData",
+      "return imgData",
     ]);
-    return stdout;
+    return { data: stdout, format: resolvedFormat };
   }
 }

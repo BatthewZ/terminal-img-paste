@@ -51,8 +51,8 @@ export function activate(context: vscode.ExtensionContext): void {
           return;
         }
 
-        const buffer = await reader.readImage();
-        const filePath = await imageStore.save(buffer);
+        const { data, format } = await reader.readImage();
+        const filePath = await imageStore.save(data, format);
         insertPathToTerminal(filePath);
 
         vscode.window.setStatusBarMessage('Image pasted to terminal', 3000);

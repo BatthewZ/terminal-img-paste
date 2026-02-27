@@ -1,4 +1,4 @@
-import { ClipboardReader, ClipboardFormat } from "./types";
+import { ClipboardReader, ClipboardFormat, ClipboardImageResult } from "./types";
 import { PlatformInfo } from "../platform/detect";
 import { exec, execBuffer } from "../util/exec";
 
@@ -94,27 +94,26 @@ export class LinuxClipboardReader implements ClipboardReader {
     throw new Error("No image found in clipboard");
   }
 
-  async readImage(): Promise<Buffer> {
-    const imageAvailable = await this.hasImage();
-    if (!imageAvailable) {
-      throw new Error("No image found in clipboard");
-    }
+  /** Map a ClipboardFormat to its MIME type string, using MIME_FORMAT_MAP as source of truth. */
+  private formatToMime(format: ClipboardFormat): string {
+    const entry = MIME_FORMAT_MAP.find(([, f]) => f === format);
+    return entry ? entry[0] : "image/png";
+  }
 
-    if (this.isWayland()) {
-      const { stdout } = await execBuffer("wl-paste", [
-        "--type",
-        "image/png",
-      ]);
-      return stdout;
-    } else {
-      const { stdout } = await execBuffer("xclip", [
-        "-selection",
-        "clipboard",
-        "-t",
-        "image/png",
-        "-o",
-      ]);
-      return stdout;
-    }
+  async readImage(): Promise<ClipboardImageResult> {
+    const format = await this.detectFormat();
+    const mime = this.formatToMime(format);
+    const resolvedFormat = format === "unknown" ? "png" : format;
+
+    const { stdout } = this.isWayland()
+      ? await execBuffer("wl-paste", ["--type", mime])
+      : await execBuffer("xclip", [
+          "-selection",
+          "clipboard",
+          "-t",
+          mime,
+          "-o",
+        ]);
+    return { data: stdout, format: resolvedFormat };
   }
 }

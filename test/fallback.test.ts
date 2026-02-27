@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { FallbackClipboardReader } from "../src/clipboard/fallback";
-import type { ClipboardReader, ClipboardFormat } from "../src/clipboard/types";
+import type { ClipboardReader, ClipboardFormat, ClipboardImageResult } from "../src/clipboard/types";
 
 function createMockReader(
   overrides: Partial<ClipboardReader> = {},
@@ -10,7 +10,7 @@ function createMockReader(
     isToolAvailable: async () => true,
     hasImage: async () => true,
     detectFormat: async () => "png" as ClipboardFormat,
-    readImage: async () => Buffer.from("fake"),
+    readImage: async () => ({ data: Buffer.from("fake"), format: "png" as ClipboardFormat }),
     ...overrides,
   };
 }
@@ -171,42 +171,57 @@ describe("FallbackClipboardReader", () => {
   // readImage()
   // -------------------------------------------------------------------------
   describe("readImage", () => {
-    it("returns buffer from first available and successful reader", async () => {
-      const buf = Buffer.from("image-data");
+    it("returns result from first available and successful reader", async () => {
+      const result: ClipboardImageResult = { data: Buffer.from("image-data"), format: "png" };
       const fb = new FallbackClipboardReader([
-        createMockReader({ readImage: async () => buf }),
+        createMockReader({ readImage: async () => result }),
         createMockReader({
-          readImage: async () => Buffer.from("second"),
+          readImage: async () => ({ data: Buffer.from("second"), format: "png" }),
         }),
       ]);
-      expect(await fb.readImage()).toEqual(buf);
+      expect(await fb.readImage()).toEqual(result);
     });
 
     it("skips reader whose tool is unavailable", async () => {
       const spy = vi.fn();
-      const buf = Buffer.from("from-second");
+      const result: ClipboardImageResult = { data: Buffer.from("from-second"), format: "jpeg" };
       const fb = new FallbackClipboardReader([
         createMockReader({
           isToolAvailable: async () => false,
           readImage: spy,
         }),
-        createMockReader({ readImage: async () => buf }),
+        createMockReader({ readImage: async () => result }),
       ]);
-      expect(await fb.readImage()).toEqual(buf);
+      expect(await fb.readImage()).toEqual(result);
       expect(spy).not.toHaveBeenCalled();
     });
 
     it("falls through when first reader available but throws on read", async () => {
-      const buf = Buffer.from("fallback-buf");
+      const result: ClipboardImageResult = { data: Buffer.from("fallback-buf"), format: "png" };
       const fb = new FallbackClipboardReader([
         createMockReader({
           readImage: async () => {
             throw new Error("read failed");
           },
         }),
-        createMockReader({ readImage: async () => buf }),
+        createMockReader({ readImage: async () => result }),
       ]);
-      expect(await fb.readImage()).toEqual(buf);
+      expect(await fb.readImage()).toEqual(result);
+    });
+
+    it("passes through format from successful reader", async () => {
+      const result: ClipboardImageResult = { data: Buffer.from("jpeg-data"), format: "jpeg" };
+      const fb = new FallbackClipboardReader([
+        createMockReader({
+          readImage: async () => {
+            throw new Error("first fails");
+          },
+        }),
+        createMockReader({ readImage: async () => result }),
+      ]);
+      const out = await fb.readImage();
+      expect(out.format).toBe("jpeg");
+      expect(out.data).toEqual(Buffer.from("jpeg-data"));
     });
 
     it("throws AggregateError when all readers fail", async () => {

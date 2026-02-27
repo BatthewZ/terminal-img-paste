@@ -200,7 +200,7 @@ describe("MacosClipboardReader", () => {
 
   // -- readImage ------------------------------------------------------------
   describe("readImage", () => {
-    it("returns a Buffer from pngpaste on success", async () => {
+    it("returns { data, format } from pngpaste on success", async () => {
       const fakeImage = Buffer.from("PNG-DATA");
       // First call: hasImage -> osascript
       mockExec.mockResolvedValueOnce({ stdout: "«class PNGf», 42", stderr: "" });
@@ -208,7 +208,7 @@ describe("MacosClipboardReader", () => {
       mockExecBuffer.mockResolvedValueOnce({ stdout: fakeImage, stderr: "" });
 
       const result = await reader.readImage();
-      expect(result).toEqual(fakeImage);
+      expect(result).toEqual({ data: fakeImage, format: "png" });
       expect(mockExecBuffer).toHaveBeenCalledWith("pngpaste", ["-"]);
     });
 
@@ -295,9 +295,9 @@ describe("LinuxClipboardReader", () => {
 
     // -- readImage ----------------------------------------------------------
     describe("readImage", () => {
-      it("returns a Buffer from xclip on success", async () => {
+      it("returns { data, format } from xclip on success (PNG)", async () => {
         const fakeImage = Buffer.from("X11-IMG");
-        // hasImage -> xclip TARGETS
+        // detectFormat -> xclip TARGETS
         mockExec.mockResolvedValueOnce({
           stdout: "image/png\nTIMESTAMP",
           stderr: "",
@@ -306,7 +306,70 @@ describe("LinuxClipboardReader", () => {
         mockExecBuffer.mockResolvedValueOnce({ stdout: fakeImage, stderr: "" });
 
         const result = await reader.readImage();
-        expect(result).toEqual(fakeImage);
+        expect(result).toEqual({ data: fakeImage, format: "png" });
+        expect(mockExecBuffer).toHaveBeenCalledWith("xclip", [
+          "-selection",
+          "clipboard",
+          "-t",
+          "image/png",
+          "-o",
+        ]);
+      });
+
+      it("extracts JPEG natively when clipboard has image/jpeg", async () => {
+        const fakeImage = Buffer.from("JPEG-IMG");
+        // detectFormat -> xclip TARGETS
+        mockExec.mockResolvedValueOnce({
+          stdout: "image/jpeg\nTIMESTAMP",
+          stderr: "",
+        });
+        // execBuffer -> xclip read with JPEG MIME
+        mockExecBuffer.mockResolvedValueOnce({ stdout: fakeImage, stderr: "" });
+
+        const result = await reader.readImage();
+        expect(result).toEqual({ data: fakeImage, format: "jpeg" });
+        expect(mockExecBuffer).toHaveBeenCalledWith("xclip", [
+          "-selection",
+          "clipboard",
+          "-t",
+          "image/jpeg",
+          "-o",
+        ]);
+      });
+
+      it("extracts WebP natively when clipboard has image/webp", async () => {
+        const fakeImage = Buffer.from("WEBP-IMG");
+        // detectFormat -> xclip TARGETS
+        mockExec.mockResolvedValueOnce({
+          stdout: "image/webp\nTIMESTAMP",
+          stderr: "",
+        });
+        // execBuffer -> xclip read with WebP MIME
+        mockExecBuffer.mockResolvedValueOnce({ stdout: fakeImage, stderr: "" });
+
+        const result = await reader.readImage();
+        expect(result).toEqual({ data: fakeImage, format: "webp" });
+        expect(mockExecBuffer).toHaveBeenCalledWith("xclip", [
+          "-selection",
+          "clipboard",
+          "-t",
+          "image/webp",
+          "-o",
+        ]);
+      });
+
+      it("falls back to PNG for unknown image format", async () => {
+        const fakeImage = Buffer.from("UNKNOWN-IMG");
+        // detectFormat -> xclip TARGETS (unrecognized image type)
+        mockExec.mockResolvedValueOnce({
+          stdout: "image/x-custom\nTIMESTAMP",
+          stderr: "",
+        });
+        // execBuffer -> xclip read with image/png fallback
+        mockExecBuffer.mockResolvedValueOnce({ stdout: fakeImage, stderr: "" });
+
+        const result = await reader.readImage();
+        expect(result).toEqual({ data: fakeImage, format: "png" });
         expect(mockExecBuffer).toHaveBeenCalledWith("xclip", [
           "-selection",
           "clipboard",
@@ -389,9 +452,9 @@ describe("LinuxClipboardReader", () => {
 
     // -- readImage ----------------------------------------------------------
     describe("readImage", () => {
-      it("returns a Buffer from wl-paste on success", async () => {
+      it("returns { data, format } from wl-paste on success (PNG)", async () => {
         const fakeImage = Buffer.from("WAYLAND-IMG");
-        // hasImage -> wl-paste --list-types
+        // detectFormat -> wl-paste --list-types
         mockExec.mockResolvedValueOnce({
           stdout: "image/png\ntext/plain",
           stderr: "",
@@ -400,10 +463,27 @@ describe("LinuxClipboardReader", () => {
         mockExecBuffer.mockResolvedValueOnce({ stdout: fakeImage, stderr: "" });
 
         const result = await reader.readImage();
-        expect(result).toEqual(fakeImage);
+        expect(result).toEqual({ data: fakeImage, format: "png" });
         expect(mockExecBuffer).toHaveBeenCalledWith("wl-paste", [
           "--type",
           "image/png",
+        ]);
+      });
+
+      it("extracts JPEG natively when clipboard has image/jpeg", async () => {
+        const fakeImage = Buffer.from("WAYLAND-JPEG");
+        // detectFormat -> wl-paste --list-types
+        mockExec.mockResolvedValueOnce({
+          stdout: "image/jpeg\ntext/plain",
+          stderr: "",
+        });
+        mockExecBuffer.mockResolvedValueOnce({ stdout: fakeImage, stderr: "" });
+
+        const result = await reader.readImage();
+        expect(result).toEqual({ data: fakeImage, format: "jpeg" });
+        expect(mockExecBuffer).toHaveBeenCalledWith("wl-paste", [
+          "--type",
+          "image/jpeg",
         ]);
       });
 
@@ -498,7 +578,7 @@ describe("WindowsClipboardReader", () => {
       mockUnlink.mockResolvedValueOnce(undefined);
 
       const result = await reader.readImage();
-      expect(result).toEqual(fakeImage);
+      expect(result).toEqual({ data: fakeImage, format: "png" });
       // Windows reader: resolveTempPath is identity, so path is the trimmed stdout
       expect(mockReadFile).toHaveBeenCalledWith(
         "C:\\Users\\test\\AppData\\Local\\Temp\\tmp1234.tmp",
@@ -545,7 +625,7 @@ describe("WindowsClipboardReader", () => {
 
       // Should resolve normally despite unlink failure
       const result = await reader.readImage();
-      expect(result).toEqual(fakeImage);
+      expect(result).toEqual({ data: fakeImage, format: "png" });
     });
   });
 });
@@ -635,7 +715,7 @@ describe("WslClipboardReader", () => {
       mockUnlink.mockResolvedValueOnce(undefined);
 
       const result = await reader.readImage();
-      expect(result).toEqual(fakeImage);
+      expect(result).toEqual({ data: fakeImage, format: "png" });
 
       // Verify wslpath was called with the Windows path
       expect(mockExec).toHaveBeenCalledWith("wslpath", ["-u", winPath]);
@@ -696,7 +776,7 @@ describe("readImage error paths", () => {
     });
 
     it("throws when execBuffer rejects (xclip crash)", async () => {
-      // hasImage -> true
+      // detectFormat -> TARGETS
       mockExec.mockResolvedValueOnce({ stdout: "image/png\nTIMESTAMP", stderr: "" });
       // execBuffer -> xclip crashes
       mockExecBuffer.mockRejectedValueOnce(new Error("xclip: cannot connect to X server"));
@@ -712,6 +792,7 @@ describe("readImage error paths", () => {
     });
 
     it("throws when execBuffer rejects (wl-paste crash)", async () => {
+      // detectFormat -> list-types
       mockExec.mockResolvedValueOnce({ stdout: "image/png\ntext/plain", stderr: "" });
       mockExecBuffer.mockRejectedValueOnce(new Error("wl-paste: no wayland display"));
       await expect(reader.readImage()).rejects.toThrow("wl-paste: no wayland display");
@@ -1156,12 +1237,28 @@ describe("MacosOsascriptClipboardReader", () => {
   });
 
   describe("detectFormat", () => {
-    it("returns 'png' when image present", async () => {
+    it("returns 'png' when clipboard has PNGf", async () => {
       mockExec.mockResolvedValueOnce({
         stdout: "«class PNGf», 42",
         stderr: "",
       });
       expect(await reader.detectFormat()).toBe("png");
+    });
+
+    it("returns 'jpeg' when clipboard has JPEG", async () => {
+      mockExec.mockResolvedValueOnce({
+        stdout: "«class JPEG», 2048",
+        stderr: "",
+      });
+      expect(await reader.detectFormat()).toBe("jpeg");
+    });
+
+    it("returns 'tiff' when clipboard has TIFF only", async () => {
+      mockExec.mockResolvedValueOnce({
+        stdout: "«class TIFF», 1024",
+        stderr: "",
+      });
+      expect(await reader.detectFormat()).toBe("tiff");
     });
 
     it("throws when no image present", async () => {
@@ -1176,20 +1273,71 @@ describe("MacosOsascriptClipboardReader", () => {
   });
 
   describe("readImage", () => {
-    it("returns buffer from osascript output", async () => {
+    it("returns { data, format } from osascript for PNG", async () => {
       const fakeImage = Buffer.from("OSASCRIPT-PNG");
-      // hasImage check
+      // detectFormat -> clipboard info
       mockExec.mockResolvedValueOnce({ stdout: "«class PNGf», 42", stderr: "" });
       // execBuffer -> osascript
       mockExecBuffer.mockResolvedValueOnce({ stdout: fakeImage, stderr: "" });
 
       const result = await reader.readImage();
-      expect(result).toEqual(fakeImage);
+      expect(result).toEqual({ data: fakeImage, format: "png" });
       expect(mockExecBuffer).toHaveBeenCalledWith("osascript", [
         "-e",
-        "set pngData to (the clipboard as «class PNGf»)",
+        "set imgData to (the clipboard as «class PNGf»)",
         "-e",
-        "return pngData",
+        "return imgData",
+      ]);
+    });
+
+    it("extracts JPEG natively via osascript", async () => {
+      const fakeImage = Buffer.from("OSASCRIPT-JPEG");
+      // detectFormat -> clipboard info with JPEG
+      mockExec.mockResolvedValueOnce({ stdout: "«class JPEG», 2048", stderr: "" });
+      // execBuffer -> osascript with JPEG class
+      mockExecBuffer.mockResolvedValueOnce({ stdout: fakeImage, stderr: "" });
+
+      const result = await reader.readImage();
+      expect(result).toEqual({ data: fakeImage, format: "jpeg" });
+      expect(mockExecBuffer).toHaveBeenCalledWith("osascript", [
+        "-e",
+        "set imgData to (the clipboard as «class JPEG»)",
+        "-e",
+        "return imgData",
+      ]);
+    });
+
+    it("extracts TIFF natively via osascript", async () => {
+      const fakeImage = Buffer.from("OSASCRIPT-TIFF");
+      // detectFormat -> clipboard info with TIFF
+      mockExec.mockResolvedValueOnce({ stdout: "«class TIFF», 1024", stderr: "" });
+      // execBuffer -> osascript with TIFF class
+      mockExecBuffer.mockResolvedValueOnce({ stdout: fakeImage, stderr: "" });
+
+      const result = await reader.readImage();
+      expect(result).toEqual({ data: fakeImage, format: "tiff" });
+      expect(mockExecBuffer).toHaveBeenCalledWith("osascript", [
+        "-e",
+        "set imgData to (the clipboard as «class TIFF»)",
+        "-e",
+        "return imgData",
+      ]);
+    });
+
+    it("falls back to PNG for BMP (unsupported by osascript class map)", async () => {
+      const fakeImage = Buffer.from("OSASCRIPT-BMP-AS-PNG");
+      // detectFormat -> clipboard info with BMP
+      mockExec.mockResolvedValueOnce({ stdout: "«class BMP », 4096", stderr: "" });
+      // execBuffer -> osascript falls back to PNGf
+      mockExecBuffer.mockResolvedValueOnce({ stdout: fakeImage, stderr: "" });
+
+      const result = await reader.readImage();
+      expect(result).toEqual({ data: fakeImage, format: "png" });
+      expect(mockExecBuffer).toHaveBeenCalledWith("osascript", [
+        "-e",
+        "set imgData to (the clipboard as «class PNGf»)",
+        "-e",
+        "return imgData",
       ]);
     });
 

@@ -1,5 +1,11 @@
-import { ClipboardReader, ClipboardFormat } from "./types";
+import { ClipboardReader, ClipboardFormat, ClipboardImageResult } from "./types";
 import { exec, execBuffer } from "../util/exec";
+
+/** Fetch raw clipboard info string from osascript (shared by macOS readers). */
+export async function getClipboardInfo(): Promise<string> {
+  const { stdout } = await exec("osascript", ["-e", "clipboard info"]);
+  return stdout;
+}
 
 /** Parse macOS `clipboard info` output and return detected formats in preference order. */
 export function parseClipboardFormats(info: string): ClipboardFormat[] {
@@ -33,15 +39,9 @@ export class MacosClipboardReader implements ClipboardReader {
     }
   }
 
-  /** Fetch raw clipboard info string from osascript. */
-  private async getClipboardInfo(): Promise<string> {
-    const { stdout } = await exec("osascript", ["-e", "clipboard info"]);
-    return stdout;
-  }
-
   async hasImage(): Promise<boolean> {
     try {
-      const info = await this.getClipboardInfo();
+      const info = await getClipboardInfo();
       return parseClipboardFormats(info).length > 0;
     } catch {
       return false;
@@ -49,7 +49,7 @@ export class MacosClipboardReader implements ClipboardReader {
   }
 
   async detectFormat(): Promise<ClipboardFormat> {
-    const info = await this.getClipboardInfo();
+    const info = await getClipboardInfo();
     const formats = parseClipboardFormats(info);
     if (formats.length > 0) {
       return formats[0];
@@ -57,12 +57,12 @@ export class MacosClipboardReader implements ClipboardReader {
     throw new Error("No image found in clipboard");
   }
 
-  async readImage(): Promise<Buffer> {
+  async readImage(): Promise<ClipboardImageResult> {
     const imageAvailable = await this.hasImage();
     if (!imageAvailable) {
       throw new Error("No image found in clipboard");
     }
     const { stdout } = await execBuffer("pngpaste", ["-"]);
-    return stdout;
+    return { data: stdout, format: "png" };
   }
 }

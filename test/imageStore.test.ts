@@ -280,7 +280,7 @@ describe('createImageStore', () => {
       expect(fs.promises.unlink).not.toHaveBeenCalled();
     });
 
-    it('only considers .png files when counting', async () => {
+    it('only considers image files when counting', async () => {
       setConfig('maxImages', 2);
 
       const files = [
@@ -298,6 +298,28 @@ describe('createImageStore', () => {
       await store.cleanup();
 
       // 3 png files, maxImages=2, so delete 1 oldest
+      expect(fs.promises.unlink).toHaveBeenCalledTimes(1);
+      expect(fs.promises.unlink).toHaveBeenCalledWith(
+        path.join(IMAGE_FOLDER, 'img-2026-01-01T00-00-00-000.png'),
+      );
+    });
+
+    it('includes all image extensions in cleanup counting', async () => {
+      setConfig('maxImages', 2);
+
+      const files = [
+        'img-2026-01-01T00-00-00-000.png',
+        'img-2026-01-02T00-00-00-000.jpg',
+        'img-2026-01-03T00-00-00-000.webp',
+      ];
+      vi.mocked(fs.promises.readdir).mockResolvedValue(
+        files as unknown as fs.Dirent[],
+      );
+
+      const store = createImageStore();
+      await store.cleanup();
+
+      // 3 image files, maxImages=2, so delete 1 oldest
       expect(fs.promises.unlink).toHaveBeenCalledTimes(1);
       expect(fs.promises.unlink).toHaveBeenCalledWith(
         path.join(IMAGE_FOLDER, 'img-2026-01-01T00-00-00-000.png'),
@@ -360,6 +382,101 @@ describe('createImageStore', () => {
     it('accepts a buffer with a valid PNG signature', async () => {
       const store = createImageStore();
       await expect(store.save(FAKE_PNG)).resolves.toBeDefined();
+    });
+  });
+
+  describe('multi-format validation and saving', () => {
+    const FAKE_JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]);
+    const FAKE_BMP = Buffer.from([0x42, 0x4d, 0x00, 0x00, 0x00, 0x00]);
+    const FAKE_WEBP = Buffer.concat([
+      Buffer.from('RIFF'),
+      Buffer.from([0x00, 0x00, 0x00, 0x00]),
+      Buffer.from('WEBP'),
+    ]);
+    const FAKE_TIFF_LE = Buffer.from([0x49, 0x49, 0x2a, 0x00]);
+    const FAKE_TIFF_BE = Buffer.from([0x4d, 0x4d, 0x00, 0x2a]);
+
+    it('saves JPEG with .jpg extension', async () => {
+      const store = createImageStore();
+      const result = await store.save(FAKE_JPEG, 'jpeg');
+      expect(result).toMatch(/\.jpg$/);
+    });
+
+    it('saves WebP with .webp extension', async () => {
+      const store = createImageStore();
+      const result = await store.save(FAKE_WEBP, 'webp');
+      expect(result).toMatch(/\.webp$/);
+    });
+
+    it('saves TIFF with .tiff extension', async () => {
+      const store = createImageStore();
+      const result = await store.save(FAKE_TIFF_LE, 'tiff');
+      expect(result).toMatch(/\.tiff$/);
+    });
+
+    it('saves BMP with .bmp extension', async () => {
+      const store = createImageStore();
+      const result = await store.save(FAKE_BMP, 'bmp');
+      expect(result).toMatch(/\.bmp$/);
+    });
+
+    it('saves unknown format with .png extension and skips validation', async () => {
+      const store = createImageStore();
+      const result = await store.save(Buffer.from('arbitrary-data'), 'unknown');
+      expect(result).toMatch(/\.png$/);
+    });
+
+    it('validates JPEG magic bytes (accepts valid)', async () => {
+      const store = createImageStore();
+      await expect(store.save(FAKE_JPEG, 'jpeg')).resolves.toBeDefined();
+    });
+
+    it('validates JPEG magic bytes (rejects invalid)', async () => {
+      const store = createImageStore();
+      await expect(store.save(Buffer.from('not-jpeg'), 'jpeg')).rejects.toThrow(
+        'Clipboard data is not a valid JPEG image',
+      );
+    });
+
+    it('validates BMP magic bytes (accepts valid)', async () => {
+      const store = createImageStore();
+      await expect(store.save(FAKE_BMP, 'bmp')).resolves.toBeDefined();
+    });
+
+    it('validates BMP magic bytes (rejects invalid)', async () => {
+      const store = createImageStore();
+      await expect(store.save(Buffer.from('not-bmp'), 'bmp')).rejects.toThrow(
+        'Clipboard data is not a valid BMP image',
+      );
+    });
+
+    it('validates WebP magic bytes (accepts valid)', async () => {
+      const store = createImageStore();
+      await expect(store.save(FAKE_WEBP, 'webp')).resolves.toBeDefined();
+    });
+
+    it('validates WebP magic bytes (rejects invalid)', async () => {
+      const store = createImageStore();
+      await expect(store.save(Buffer.from('not-webp-data'), 'webp')).rejects.toThrow(
+        'Clipboard data is not a valid WebP image',
+      );
+    });
+
+    it('validates TIFF magic bytes little-endian (accepts valid)', async () => {
+      const store = createImageStore();
+      await expect(store.save(FAKE_TIFF_LE, 'tiff')).resolves.toBeDefined();
+    });
+
+    it('validates TIFF magic bytes big-endian (accepts valid)', async () => {
+      const store = createImageStore();
+      await expect(store.save(FAKE_TIFF_BE, 'tiff')).resolves.toBeDefined();
+    });
+
+    it('validates TIFF magic bytes (rejects invalid)', async () => {
+      const store = createImageStore();
+      await expect(store.save(Buffer.from('not-tiff'), 'tiff')).rejects.toThrow(
+        'Clipboard data is not a valid TIFF image',
+      );
     });
   });
 

@@ -2,10 +2,11 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { logger } from '../util/logger';
+import type { ClipboardFormat } from '../clipboard/types';
 
 export interface ImageStore {
-  /** Save a PNG buffer to the image folder. Returns the absolute file path. */
-  save(imageBuffer: Buffer): Promise<string>;
+  /** Save an image buffer to the image folder. Returns the absolute file path. */
+  save(imageBuffer: Buffer, format?: ClipboardFormat): Promise<string>;
 
   /** Delete the oldest images if count exceeds maxImages setting. */
   cleanup(): Promise<void>;
@@ -16,12 +17,71 @@ export interface ImageStore {
 
 const DEFAULT_FOLDER_NAME = '.tip-images';
 
+/** All image file extensions managed by this store. */
+const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.tiff', '.bmp', '.webp'];
+
+/** Map from ClipboardFormat to file extension. */
+function formatToExtension(format: ClipboardFormat): string {
+  switch (format) {
+    case 'jpeg':
+      return '.jpg';
+    case 'tiff':
+      return '.tiff';
+    case 'bmp':
+      return '.bmp';
+    case 'webp':
+      return '.webp';
+    case 'png':
+    case 'unknown':
+    default:
+      return '.png';
+  }
+}
+
 /** First 8 bytes of every valid PNG file. */
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
-function validatePng(buffer: Buffer): void {
-  if (buffer.length < PNG_SIGNATURE.length || !buffer.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)) {
-    throw new Error('Clipboard data is not a valid PNG image');
+/** Validate image data matches the expected format's magic bytes. */
+function validateImage(buffer: Buffer, format: ClipboardFormat): void {
+  switch (format) {
+    case 'png':
+      if (buffer.length < PNG_SIGNATURE.length || !buffer.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)) {
+        throw new Error('Clipboard data is not a valid PNG image');
+      }
+      break;
+    case 'jpeg':
+      if (buffer.length < 2 || buffer[0] !== 0xff || buffer[1] !== 0xd8) {
+        throw new Error('Clipboard data is not a valid JPEG image');
+      }
+      break;
+    case 'bmp':
+      if (buffer.length < 2 || buffer[0] !== 0x42 || buffer[1] !== 0x4d) {
+        throw new Error('Clipboard data is not a valid BMP image');
+      }
+      break;
+    case 'webp':
+      if (
+        buffer.length < 12 ||
+        buffer.subarray(0, 4).toString('ascii') !== 'RIFF' ||
+        buffer.subarray(8, 12).toString('ascii') !== 'WEBP'
+      ) {
+        throw new Error('Clipboard data is not a valid WebP image');
+      }
+      break;
+    case 'tiff':
+      if (
+        buffer.length < 2 ||
+        !(
+          (buffer[0] === 0x49 && buffer[1] === 0x49) ||
+          (buffer[0] === 0x4d && buffer[1] === 0x4d)
+        )
+      ) {
+        throw new Error('Clipboard data is not a valid TIFF image');
+      }
+      break;
+    case 'unknown':
+      logger.warn('Skipping image validation for unknown format');
+      break;
   }
 }
 
@@ -56,7 +116,7 @@ function getImageFolderPath(): string {
   return resolved;
 }
 
-function generateFileName(): string {
+function generateFileName(format: ClipboardFormat): string {
   const now = new Date();
   const y = now.getFullYear();
   const mo = String(now.getMonth() + 1).padStart(2, '0');
@@ -65,18 +125,19 @@ function generateFileName(): string {
   const mi = String(now.getMinutes()).padStart(2, '0');
   const s = String(now.getSeconds()).padStart(2, '0');
   const ms = String(now.getMilliseconds()).padStart(3, '0');
-  return `img-${y}-${mo}-${d}T${h}-${mi}-${s}-${ms}.png`;
+  const ext = formatToExtension(format);
+  return `img-${y}-${mo}-${d}T${h}-${mi}-${s}-${ms}${ext}`;
 }
 
 export function createImageStore(): ImageStore {
   return {
-    async save(imageBuffer: Buffer): Promise<string> {
-      validatePng(imageBuffer);
+    async save(imageBuffer: Buffer, format: ClipboardFormat = 'png'): Promise<string> {
+      validateImage(imageBuffer, format);
 
       const folder = getImageFolderPath();
       await fs.promises.mkdir(folder, { recursive: true });
 
-      const fileName = generateFileName();
+      const fileName = generateFileName(format);
       const filePath = path.join(folder, fileName);
       await fs.promises.writeFile(filePath, imageBuffer, { mode: 0o600 });
 
@@ -104,15 +165,15 @@ export function createImageStore(): ImageStore {
         return;
       }
 
-      const pngFiles = entries
-        .filter((f) => f.endsWith('.png'))
+      const imageFiles = entries
+        .filter((f) => IMAGE_EXTENSIONS.some((ext) => f.endsWith(ext)))
         .sort();
 
-      if (pngFiles.length <= maxImages) {
+      if (imageFiles.length <= maxImages) {
         return;
       }
 
-      const toDelete = pngFiles.slice(0, pngFiles.length - maxImages);
+      const toDelete = imageFiles.slice(0, imageFiles.length - maxImages);
       for (const file of toDelete) {
         const filePath = path.join(folder, file);
         try {
