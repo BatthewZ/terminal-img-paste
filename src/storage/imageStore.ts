@@ -96,10 +96,7 @@ function getConfig(): vscode.WorkspaceConfiguration {
 function getWorkspaceRoot(): string {
   const folders = vscode.workspace.workspaceFolders;
   if (!folders || folders.length === 0) {
-    vscode.window.showErrorMessage(
-      'Terminal Image Paste: No workspace folder is open. Please open a folder first.',
-    );
-    throw new Error('No workspace folder is open');
+    throw new Error('No workspace folder is open. Please open a folder first.');
   }
   return folders[0].uri.fsPath;
 }
@@ -299,8 +296,8 @@ async function removeEmptyDirs(dir: string, rootFolder: string): Promise<void> {
       await fs.promises.rmdir(dir);
       logger.info(`Removed empty directory: ${dir}`);
     }
-  } catch {
-    // Ignore errors during cleanup
+  } catch (err) {
+    logger.warn(`Failed to remove empty directory ${dir}:`, err);
   }
 }
 

@@ -29,7 +29,7 @@ export function activate(context: vscode.ExtensionContext): TerminalImgPasteApi 
   // Check tool availability at activation — warn but don't block
   reader.isToolAvailable().then((available) => {
     if (!available) {
-      notify.warning(
+      void notify.warning(
         `Terminal Image Paste: clipboard tool "${reader.requiredTool()}" not found. ` +
           `Install it to use clipboard image pasting.`,
       );
@@ -47,7 +47,7 @@ export function activate(context: vscode.ExtensionContext): TerminalImgPasteApi 
       try {
         const toolAvailable = await reader.isToolAvailable();
         if (!toolAvailable) {
-          notify.warning(
+          void notify.warning(
             `Terminal Image Paste: "${reader.requiredTool()}" is not installed. ` +
               `Please install it to paste clipboard images.`,
           );
@@ -60,7 +60,7 @@ export function activate(context: vscode.ExtensionContext): TerminalImgPasteApi 
         if (warnOnRemote) {
           const remoteCtx = detectRemoteContext();
           if (remoteCtx.remote && remoteCtx.type !== 'wsl') {
-            const choice = await vscode.window.showWarningMessage(
+            const choice = await notify.warning(
               'Clipboard images are saved locally. The pasted path may not be accessible from the remote terminal.',
               'Paste Anyway',
               'Cancel',
@@ -126,7 +126,7 @@ export function activate(context: vscode.ExtensionContext): TerminalImgPasteApi 
     () => runDiagnostics(platform, reader),
   );
 
-  const dropZoneProvider = new DropZoneProvider(context.extensionUri, imageStore, pasteEmitter);
+  const dropZoneProvider = new DropZoneProvider(context.extensionUri, imageStore, pasteEmitter, pasteMutex);
   const dropZoneDisposable = vscode.window.registerWebviewViewProvider(
     'terminalImgPaste.dropZone',
     dropZoneProvider,

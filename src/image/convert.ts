@@ -136,7 +136,7 @@ async function convertWithMagick(
   sourceFormat: ClipboardFormat,
   targetFormat: SaveFormat,
 ): Promise<Buffer> {
-  const inputSpec = `${sourceFormat}:-`;
+  const inputSpec = sourceFormat === 'unknown' ? '-' : `${sourceFormat}:-`;
   const outputSpec = `${targetFormat}:-`;
   const result = await execBuffer('convert', [inputSpec, outputSpec], {
     input: data,

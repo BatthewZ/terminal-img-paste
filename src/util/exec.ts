@@ -76,7 +76,7 @@ export function execBuffer(
   options?: ExecOptions,
 ): Promise<ExecBufferResult> {
   if (options?.input) {
-    return execBufferWithStdin(command, args, options);
+    return execBufferWithStdin(command, args, options as ExecOptions & { input: Buffer });
   }
 
   return new Promise((resolve, reject) => {

@@ -8,6 +8,7 @@ import { insertPathToTerminal } from '../terminal/insertPath';
 import { detectPlatform } from '../platform/detect';
 import { logger } from '../util/logger';
 import { notify } from '../util/notify';
+import { Mutex } from '../util/mutex';
 
 const ACCEPTED_MIMES: Record<string, ClipboardFormat> = {
   'image/png': 'png',
@@ -35,13 +36,16 @@ type WebviewMessage = FilesDroppedMessage;
 
 export class DropZoneProvider implements vscode.WebviewViewProvider {
   private readonly _extensionUri: vscode.Uri;
+  private readonly _mutex: Mutex;
 
   constructor(
     extensionUri: vscode.Uri,
     private readonly imageStore: ImageStore,
     private readonly pasteEmitter: vscode.EventEmitter<PasteResult>,
+    mutex?: Mutex,
   ) {
     this._extensionUri = extensionUri;
+    this._mutex = mutex ?? new Mutex();
   }
 
   resolveWebviewView(
@@ -76,6 +80,18 @@ export class DropZoneProvider implements vscode.WebviewViewProvider {
       return;
     }
 
+    const release = await this._mutex.acquire();
+    try {
+      await this._processDroppedFiles(files, webview);
+    } finally {
+      release();
+    }
+  }
+
+  private async _processDroppedFiles(
+    files: DroppedFile[],
+    webview: vscode.Webview,
+  ): Promise<void> {
     const config = vscode.workspace.getConfiguration('terminalImgPaste');
     const saveFormat = config.get<SaveFormat>('saveFormat', 'auto');
     const platform = detectPlatform();

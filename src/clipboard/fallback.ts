@@ -1,4 +1,5 @@
 import { ClipboardReader, ClipboardFormat, ClipboardImageResult } from "./types";
+import { logger } from "../util/logger";
 
 /**
  * Tries each reader in order. The first reader whose operation succeeds wins.
@@ -38,7 +39,8 @@ export class FallbackClipboardReader implements ClipboardReader {
         if (await reader.hasImage()) {
           return true;
         }
-      } catch {
+      } catch (err) {
+        logger.warn(`Clipboard reader ${reader.requiredTool()} failed hasImage(): ${err}`);
         continue;
       }
     }

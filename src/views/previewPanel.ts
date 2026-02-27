@@ -13,6 +13,7 @@ export function showImagePreview(
 ): Promise<boolean> {
   return new Promise<boolean>((resolve) => {
     let resolved = false;
+    let timer: ReturnType<typeof setTimeout> | undefined = undefined;
     const finish = (value: boolean) => {
       if (resolved) return;
       resolved = true;
@@ -28,7 +29,7 @@ export function showImagePreview(
       { enableScripts: true },
     );
 
-    const mimeType = `image/${format}`;
+    const mimeType = format === 'unknown' ? 'image/png' : `image/${format}`;
     const base64 = imageData.toString('base64');
 
     panel.webview.html = buildHtml(mimeType, base64, TIMEOUT_MS);
@@ -45,7 +46,7 @@ export function showImagePreview(
       finish(false);
     });
 
-    const timer = setTimeout(() => {
+    timer = setTimeout(() => {
       finish(false);
     }, TIMEOUT_MS + 500); // small buffer beyond the client-side countdown
   });

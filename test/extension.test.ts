@@ -365,13 +365,13 @@ describe('pasteImage command handler', () => {
 describe('pasteImage remote terminal awareness', () => {
   it('shows warning when in SSH remote context', async () => {
     vi.mocked(detectRemoteContext).mockReturnValue({ remote: true, type: 'ssh-remote' });
-    vi.mocked(window.showWarningMessage).mockResolvedValue('Cancel' as any);
+    vi.mocked(notify.warning).mockResolvedValue('Cancel');
 
     activate(makeContext());
     const handler = __getRegisteredCommand('terminalImgPaste.pasteImage')!;
     await handler();
 
-    expect(window.showWarningMessage).toHaveBeenCalledWith(
+    expect(notify.warning).toHaveBeenCalledWith(
       expect.stringContaining('may not be accessible from the remote terminal'),
       'Paste Anyway',
       'Cancel',
@@ -385,7 +385,7 @@ describe('pasteImage remote terminal awareness', () => {
     const handler = __getRegisteredCommand('terminalImgPaste.pasteImage')!;
     await handler();
 
-    expect(window.showWarningMessage).not.toHaveBeenCalledWith(
+    expect(notify.warning).not.toHaveBeenCalledWith(
       expect.stringContaining('may not be accessible from the remote terminal'),
       expect.anything(),
       expect.anything(),
@@ -411,7 +411,7 @@ describe('pasteImage remote terminal awareness', () => {
     const handler = __getRegisteredCommand('terminalImgPaste.pasteImage')!;
     await handler();
 
-    expect(window.showWarningMessage).not.toHaveBeenCalledWith(
+    expect(notify.warning).not.toHaveBeenCalledWith(
       expect.stringContaining('may not be accessible from the remote terminal'),
       expect.anything(),
       expect.anything(),
@@ -421,7 +421,7 @@ describe('pasteImage remote terminal awareness', () => {
 
   it('aborts when user selects "Cancel" on remote warning', async () => {
     vi.mocked(detectRemoteContext).mockReturnValue({ remote: true, type: 'ssh-remote' });
-    vi.mocked(window.showWarningMessage).mockResolvedValue('Cancel' as any);
+    vi.mocked(notify.warning).mockResolvedValue('Cancel');
 
     activate(makeContext());
     const handler = __getRegisteredCommand('terminalImgPaste.pasteImage')!;
@@ -432,7 +432,7 @@ describe('pasteImage remote terminal awareness', () => {
 
   it('aborts when user dismisses remote warning', async () => {
     vi.mocked(detectRemoteContext).mockReturnValue({ remote: true, type: 'dev-container' });
-    vi.mocked(window.showWarningMessage).mockResolvedValue(undefined as any);
+    vi.mocked(notify.warning).mockResolvedValue(undefined);
 
     activate(makeContext());
     const handler = __getRegisteredCommand('terminalImgPaste.pasteImage')!;
@@ -443,7 +443,7 @@ describe('pasteImage remote terminal awareness', () => {
 
   it('proceeds when user selects "Paste Anyway" on remote warning', async () => {
     vi.mocked(detectRemoteContext).mockReturnValue({ remote: true, type: 'ssh-remote' });
-    vi.mocked(window.showWarningMessage).mockResolvedValue('Paste Anyway' as any);
+    vi.mocked(notify.warning).mockResolvedValue('Paste Anyway');
 
     activate(makeContext());
     const handler = __getRegisteredCommand('terminalImgPaste.pasteImage')!;
