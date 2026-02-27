@@ -1,38 +1,19 @@
-# Agent 81316d93 — Phase 30: Symlink & Permission Hardening (Complete)
+# Agent 883b20ed — Test, Build & Commit (Iteration 4 — Complete)
 
-## Summary
+## Test Results
+- **436 tests passed** across 16 test files, 0 failures
+- Duration: 1.09s
 
-Implemented all 5 tasks from Phase 30 (Symlink and Permission Hardening):
+## Build
+- `npm run compile` — passes cleanly
 
-1. **Symlink escape detection** — `assertInsideWorkspace()` in `imageStore.ts` prevents symlink escape attacks
-2. **writeSecureFile utility** — All image write paths use consistent `0o600` permissions
-3. **PowerShell `-EncodedCommand`** — Eliminated `-Command` for all non-trivial PowerShell scripts
-4. **Tool path resolution** — Clipboard tools resolved to absolute paths and cached
-5. **Tests** — 20 new tests across 3 new test files, updated 3 existing test files
+## Lint
+- `npm run lint` — passes with no warnings or errors
 
-## Build & Test
+## Commit
+- Commit hash: `35d68ce`
+- Message: "Add configurable filename patterns and deduplicate WSL clipboard reader"
+- 12 files changed, 599 insertions, 110 deletions
 
-- `npm run compile` — passes
-- `npm test` — 419 tests pass across 16 test files (0 failures)
-
-## Files Modified
-
-### New files:
-- `src/util/fs.ts` — `writeSecureFile()` utility
-- `src/util/powershell.ts` — `encodePowerShellCommand()` utility
-- `src/util/toolPath.ts` — `resolveToolPath()` / `resolveToolPathOrFallback()` / `clearToolPathCache()`
-- `test/security.test.ts` — Symlink escape + permission tests
-- `test/powershell.test.ts` — PowerShell encoding tests
-- `test/toolPath.test.ts` — Tool path resolution tests
-
-### Modified files:
-- `src/storage/imageStore.ts` — symlink detection + writeSecureFile
-- `src/image/convert.ts` — writeSecureFile + -EncodedCommand
-- `src/clipboard/powershellClipboard.ts` — -EncodedCommand
-- `src/clipboard/wslClipboard.ts` — -EncodedCommand
-- `src/clipboard/windowsClipboard.ts` — tool path resolution
-- `src/clipboard/linuxClipboard.ts` — tool path resolution
-- `src/clipboard/macosClipboard.ts` — tool path resolution
-- `test/clipboard.test.ts` — toolPath mock + -EncodedCommand assertions
-- `test/convert.test.ts` — -EncodedCommand assertions
-- `test/imageStore.test.ts` — realpath mock
+## Push
+- No remote configured (`git remote -v` returns empty) — push skipped

@@ -136,18 +136,18 @@ export function resolveFilenamePattern(
     pattern = DEFAULT_FILENAME_PATTERN;
   }
 
+  const now = new Date();
+
   const hasPlaceholder = pattern.includes('{');
   if (!hasPlaceholder) {
     // No placeholders at all — append timestamp to avoid collisions
-    const ts = formatTimestamp(new Date());
+    const ts = formatTimestamp(now);
     pattern = `${pattern}-${ts}`;
   } else if (!UNIQUENESS_PLACEHOLDERS.some((p) => pattern.includes(p))) {
     logger.warn(
       `Filename pattern "${pattern}" lacks a uniqueness placeholder (${UNIQUENESS_PLACEHOLDERS.join(', ')}). Filenames may collide.`,
     );
   }
-
-  const now = new Date();
   let result = pattern;
 
   // {timestamp}
@@ -174,14 +174,8 @@ export function resolveFilenamePattern(
 }
 
 function formatTimestamp(now: Date): string {
-  const y = now.getFullYear();
-  const mo = String(now.getMonth() + 1).padStart(2, '0');
-  const d = String(now.getDate()).padStart(2, '0');
-  const h = String(now.getHours()).padStart(2, '0');
-  const mi = String(now.getMinutes()).padStart(2, '0');
-  const s = String(now.getSeconds()).padStart(2, '0');
   const ms = String(now.getMilliseconds()).padStart(3, '0');
-  return `${y}-${mo}-${d}T${h}-${mi}-${s}-${ms}`;
+  return `${formatDate(now)}T${formatTime(now)}-${ms}`;
 }
 
 function formatDate(now: Date): string {
