@@ -4,6 +4,9 @@ import {
   window,
   __getRegisteredCommand,
   __clearRegisteredCommands,
+  __setConfig,
+  __resetConfig,
+  __setRemoteName,
 } from 'vscode';
 
 // ---------------------------------------------------------------------------
@@ -34,11 +37,21 @@ vi.mock('../src/util/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), show: vi.fn() },
 }));
 
+vi.mock('../src/image/convert', () => ({
+  convertImage: vi.fn(async (data: Buffer, format: string) => ({ data, format })),
+}));
+
+vi.mock('../src/platform/remote', () => ({
+  detectRemoteContext: vi.fn(() => ({ remote: false })),
+}));
+
 // Import after mocks
 import { activate, deactivate } from '../src/extension';
 import { createClipboardReader } from '../src/clipboard/index';
 import { createImageStore } from '../src/storage/imageStore';
 import { insertPathToTerminal } from '../src/terminal/insertPath';
+import { convertImage } from '../src/image/convert';
+import { detectRemoteContext } from '../src/platform/remote';
 import { logger } from '../src/util/logger';
 
 // ---------------------------------------------------------------------------
@@ -77,10 +90,13 @@ function makeMockImageStore(overrides: Partial<{
 beforeEach(() => {
   vi.restoreAllMocks();
   __clearRegisteredCommands();
+  __resetConfig();
+  __setRemoteName(undefined);
 
   // Re-establish default mock implementations after mockReset
   vi.mocked(createClipboardReader).mockReturnValue(makeMockReader() as any);
   vi.mocked(createImageStore).mockReturnValue(makeMockImageStore() as any);
+  vi.mocked(detectRemoteContext).mockReturnValue({ remote: false });
 });
 
 // ---------------------------------------------------------------------------
@@ -161,7 +177,7 @@ describe('activate', () => {
 // pasteImage command handler
 // ---------------------------------------------------------------------------
 describe('pasteImage command handler', () => {
-  it('reads clipboard image, saves it, and inserts path to terminal', async () => {
+  it('reads clipboard image, converts it, saves it, and inserts path to terminal', async () => {
     const reader = makeMockReader();
     const store = makeMockImageStore();
     vi.mocked(createClipboardReader).mockReturnValue(reader as any);
@@ -174,6 +190,12 @@ describe('pasteImage command handler', () => {
     expect(reader.isToolAvailable).toHaveBeenCalled();
     expect(reader.hasImage).toHaveBeenCalled();
     expect(reader.readImage).toHaveBeenCalled();
+    expect(convertImage).toHaveBeenCalledWith(
+      Buffer.from('PNG'),
+      'png',
+      'auto',
+      expect.objectContaining({ os: 'linux' }),
+    );
     expect(store.save).toHaveBeenCalledWith(Buffer.from('PNG'), 'png');
     expect(insertPathToTerminal).toHaveBeenCalledWith(
       '/test/workspace/.tip-images/img.png',
@@ -301,6 +323,100 @@ describe('pasteImage command handler', () => {
 
     // Second call should succeed (mutex was released)
     await handler();
+    expect(insertPathToTerminal).toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Remote terminal awareness
+// ---------------------------------------------------------------------------
+describe('pasteImage remote terminal awareness', () => {
+  it('shows warning when in SSH remote context', async () => {
+    vi.mocked(detectRemoteContext).mockReturnValue({ remote: true, type: 'ssh-remote' });
+    vi.mocked(window.showWarningMessage).mockResolvedValue('Cancel' as any);
+
+    activate(makeContext());
+    const handler = __getRegisteredCommand('terminalImgPaste.pasteImage')!;
+    await handler();
+
+    expect(window.showWarningMessage).toHaveBeenCalledWith(
+      expect.stringContaining('may not be accessible from the remote terminal'),
+      'Paste Anyway',
+      'Cancel',
+    );
+  });
+
+  it('proceeds without warning when in WSL remote context', async () => {
+    vi.mocked(detectRemoteContext).mockReturnValue({ remote: true, type: 'wsl' });
+
+    activate(makeContext());
+    const handler = __getRegisteredCommand('terminalImgPaste.pasteImage')!;
+    await handler();
+
+    expect(window.showWarningMessage).not.toHaveBeenCalledWith(
+      expect.stringContaining('may not be accessible from the remote terminal'),
+      expect.anything(),
+      expect.anything(),
+    );
+    expect(insertPathToTerminal).toHaveBeenCalled();
+  });
+
+  it('proceeds without warning when not in remote context', async () => {
+    vi.mocked(detectRemoteContext).mockReturnValue({ remote: false });
+
+    activate(makeContext());
+    const handler = __getRegisteredCommand('terminalImgPaste.pasteImage')!;
+    await handler();
+
+    expect(insertPathToTerminal).toHaveBeenCalled();
+  });
+
+  it('respects warnOnRemote: false setting (no warning shown)', async () => {
+    vi.mocked(detectRemoteContext).mockReturnValue({ remote: true, type: 'ssh-remote' });
+    __setConfig('warnOnRemote', false);
+
+    activate(makeContext());
+    const handler = __getRegisteredCommand('terminalImgPaste.pasteImage')!;
+    await handler();
+
+    expect(window.showWarningMessage).not.toHaveBeenCalledWith(
+      expect.stringContaining('may not be accessible from the remote terminal'),
+      expect.anything(),
+      expect.anything(),
+    );
+    expect(insertPathToTerminal).toHaveBeenCalled();
+  });
+
+  it('aborts when user selects "Cancel" on remote warning', async () => {
+    vi.mocked(detectRemoteContext).mockReturnValue({ remote: true, type: 'ssh-remote' });
+    vi.mocked(window.showWarningMessage).mockResolvedValue('Cancel' as any);
+
+    activate(makeContext());
+    const handler = __getRegisteredCommand('terminalImgPaste.pasteImage')!;
+    await handler();
+
+    expect(insertPathToTerminal).not.toHaveBeenCalled();
+  });
+
+  it('aborts when user dismisses remote warning', async () => {
+    vi.mocked(detectRemoteContext).mockReturnValue({ remote: true, type: 'dev-container' });
+    vi.mocked(window.showWarningMessage).mockResolvedValue(undefined as any);
+
+    activate(makeContext());
+    const handler = __getRegisteredCommand('terminalImgPaste.pasteImage')!;
+    await handler();
+
+    expect(insertPathToTerminal).not.toHaveBeenCalled();
+  });
+
+  it('proceeds when user selects "Paste Anyway" on remote warning', async () => {
+    vi.mocked(detectRemoteContext).mockReturnValue({ remote: true, type: 'ssh-remote' });
+    vi.mocked(window.showWarningMessage).mockResolvedValue('Paste Anyway' as any);
+
+    activate(makeContext());
+    const handler = __getRegisteredCommand('terminalImgPaste.pasteImage')!;
+    await handler();
+
     expect(insertPathToTerminal).toHaveBeenCalled();
   });
 });

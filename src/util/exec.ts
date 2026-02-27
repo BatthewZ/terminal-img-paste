@@ -202,6 +202,8 @@ function execBufferWithStdin(
       });
     });
 
+    // Ignore EPIPE errors on stdin (child may exit before consuming all input)
+    child.stdin!.on("error", () => {});
     // Write input to stdin and close it
     child.stdin!.end(options.input);
   });

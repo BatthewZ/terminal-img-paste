@@ -34,6 +34,8 @@ const configValues: Record<string, unknown> = {
   maxImages: 20,
   autoGitIgnore: true,
   sendNewline: false,
+  saveFormat: 'auto',
+  warnOnRemote: true,
 };
 
 export const workspace = {
@@ -44,6 +46,10 @@ export const workspace = {
     }),
   })),
   workspaceFolders: [{ uri: { fsPath: '/test/workspace' } }],
+};
+
+export const env: { remoteName: string | undefined } = {
+  remoteName: undefined,
 };
 
 export const Uri = {
@@ -63,6 +69,13 @@ export function __resetConfig(): void {
   configValues.maxImages = 20;
   configValues.autoGitIgnore = true;
   configValues.sendNewline = false;
+  configValues.saveFormat = 'auto';
+  configValues.warnOnRemote = true;
+}
+
+// Helper to set remote name for testing
+export function __setRemoteName(name: string | undefined): void {
+  env.remoteName = name;
 }
 
 // Helper to retrieve a registered command handler for testing

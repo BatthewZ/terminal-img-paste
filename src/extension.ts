@@ -1,8 +1,10 @@
 import * as vscode from 'vscode';
 import { detectPlatform } from './platform/detect';
+import { detectRemoteContext } from './platform/remote';
 import { createClipboardReader, ClipboardReader } from './clipboard/index';
 import { createImageStore, ImageStore } from './storage/imageStore';
 import { insertPathToTerminal } from './terminal/insertPath';
+import { convertImage, SaveFormat } from './image/convert';
 import { logger } from './util/logger';
 import { Mutex } from './util/mutex';
 
@@ -45,6 +47,23 @@ export function activate(context: vscode.ExtensionContext): void {
           return;
         }
 
+        const config = vscode.workspace.getConfiguration('terminalImgPaste');
+        const warnOnRemote = config.get<boolean>('warnOnRemote', true);
+
+        if (warnOnRemote) {
+          const remoteCtx = detectRemoteContext();
+          if (remoteCtx.remote && remoteCtx.type !== 'wsl') {
+            const choice = await vscode.window.showWarningMessage(
+              'Clipboard images are saved locally. The pasted path may not be accessible from the remote terminal.',
+              'Paste Anyway',
+              'Cancel',
+            );
+            if (choice !== 'Paste Anyway') {
+              return;
+            }
+          }
+        }
+
         const hasImage = await reader.hasImage();
         if (!hasImage) {
           vscode.window.showInformationMessage('No image found in clipboard.');
@@ -52,7 +71,11 @@ export function activate(context: vscode.ExtensionContext): void {
         }
 
         const { data, format } = await reader.readImage();
-        const filePath = await imageStore.save(data, format);
+
+        const saveFormat = config.get<SaveFormat>('saveFormat', 'auto');
+        const converted = await convertImage(data, format, saveFormat, platform);
+
+        const filePath = await imageStore.save(converted.data, converted.format);
         insertPathToTerminal(filePath);
 
         vscode.window.setStatusBarMessage('Image pasted to terminal', 3000);

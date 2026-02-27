@@ -70,6 +70,11 @@
           "enum": ["auto", "png", "jpeg"],
           "default": "auto",
           "description": "Image save format. 'auto' preserves native format, 'png' or 'jpeg' forces conversion."
+        },
+        "terminalImgPaste.warnOnRemote": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show a warning when pasting clipboard images in a remote terminal (SSH, container, etc.) since the saved path may not be accessible remotely."
         }
       }
     }
