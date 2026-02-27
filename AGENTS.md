@@ -30,6 +30,8 @@ Study swarm/PLAN.md to learn about the project specifications
 
 13. Run tests for whatever unit of code was changed. Fix if required.
 
+14. Any time you or your subagents find something confusing or misleading in the codebase, tell a subagent to append a concise message to confusion-logs.md
+
 ---
 
 # Docs

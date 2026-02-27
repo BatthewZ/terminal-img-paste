@@ -33,7 +33,18 @@ function detectDisplayServer(
   os: PlatformInfo["os"],
   isWSL: boolean
 ): PlatformInfo["displayServer"] {
-  if (os !== "linux" || isWSL) {
+  if (os !== "linux") {
+    return "unknown";
+  }
+
+  // For WSL, check for WSLg (which provides X11/Wayland via /mnt/wslg/)
+  if (isWSL) {
+    if (process.env.WAYLAND_DISPLAY) {
+      return "wayland";
+    }
+    if (process.env.DISPLAY) {
+      return "x11";
+    }
     return "unknown";
   }
 

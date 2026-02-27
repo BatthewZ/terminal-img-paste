@@ -33,9 +33,11 @@ import * as fs from "fs";
 
 import { createClipboardReader } from "../src/clipboard/index";
 import { MacosClipboardReader } from "../src/clipboard/macosClipboard";
+import { MacosOsascriptClipboardReader } from "../src/clipboard/macosOsascriptClipboard";
 import { LinuxClipboardReader } from "../src/clipboard/linuxClipboard";
 import { WindowsClipboardReader } from "../src/clipboard/windowsClipboard";
 import { WslClipboardReader } from "../src/clipboard/wslClipboard";
+import { FallbackClipboardReader } from "../src/clipboard/fallback";
 import type { PlatformInfo } from "../src/platform/detect";
 
 // Convenience typed references to the mocked functions
@@ -61,42 +63,59 @@ function makePlatform(overrides: Partial<PlatformInfo> = {}): PlatformInfo {
 // 1. Factory — createClipboardReader
 // ---------------------------------------------------------------------------
 describe("createClipboardReader", () => {
-  it("returns MacosClipboardReader for macOS", () => {
+  it("returns FallbackClipboardReader with pngpaste + osascript for macOS", () => {
     const reader = createClipboardReader(makePlatform({ os: "macos" }));
-    expect(reader).toBeInstanceOf(MacosClipboardReader);
+    expect(reader).toBeInstanceOf(FallbackClipboardReader);
+    expect(reader.requiredTool()).toContain("pngpaste");
+    expect(reader.requiredTool()).toContain("osascript");
   });
 
-  it("returns LinuxClipboardReader for Linux", () => {
+  it("returns FallbackClipboardReader for Linux x11 (xclip + wl-paste fallback)", () => {
     const reader = createClipboardReader(
       makePlatform({ os: "linux", displayServer: "x11" }),
     );
-    expect(reader).toBeInstanceOf(LinuxClipboardReader);
+    expect(reader).toBeInstanceOf(FallbackClipboardReader);
+    expect(reader.requiredTool()).toContain("xclip");
+    expect(reader.requiredTool()).toContain("wl-paste");
   });
 
-  it("returns LinuxClipboardReader with wayland display server", () => {
+  it("returns FallbackClipboardReader for Linux wayland (wl-paste + xclip fallback)", () => {
     const reader = createClipboardReader(
       makePlatform({ os: "linux", displayServer: "wayland" }),
     );
-    expect(reader).toBeInstanceOf(LinuxClipboardReader);
+    expect(reader).toBeInstanceOf(FallbackClipboardReader);
+    expect(reader.requiredTool()).toContain("wl-paste");
+    expect(reader.requiredTool()).toContain("xclip");
   });
 
-  it("returns WindowsClipboardReader for Windows", () => {
+  it("returns WindowsClipboardReader for Windows (no fallback)", () => {
     const reader = createClipboardReader(makePlatform({ os: "windows" }));
     expect(reader).toBeInstanceOf(WindowsClipboardReader);
   });
 
-  it("returns WslClipboardReader when isWSL is true (takes priority over os)", () => {
+  it("returns plain WslClipboardReader when isWSL is true without display server", () => {
     const reader = createClipboardReader(
-      makePlatform({ os: "linux", isWSL: true, powershellPath: "/mnt/c/ps.exe" }),
+      makePlatform({ os: "linux", isWSL: true, displayServer: "unknown", powershellPath: "/mnt/c/ps.exe" }),
     );
     expect(reader).toBeInstanceOf(WslClipboardReader);
   });
 
-  it("returns WslClipboardReader even when os is linux", () => {
+  it("returns FallbackClipboardReader for WSL with WAYLAND_DISPLAY", () => {
     const reader = createClipboardReader(
-      makePlatform({ os: "linux", isWSL: true }),
+      makePlatform({ os: "linux", isWSL: true, displayServer: "wayland", powershellPath: "/mnt/c/ps.exe" }),
     );
-    expect(reader).toBeInstanceOf(WslClipboardReader);
+    expect(reader).toBeInstanceOf(FallbackClipboardReader);
+    expect(reader.requiredTool()).toContain("PowerShell (via WSL interop)");
+    expect(reader.requiredTool()).toContain("wl-paste");
+  });
+
+  it("returns FallbackClipboardReader for WSL with DISPLAY (x11)", () => {
+    const reader = createClipboardReader(
+      makePlatform({ os: "linux", isWSL: true, displayServer: "x11", powershellPath: "/mnt/c/ps.exe" }),
+    );
+    expect(reader).toBeInstanceOf(FallbackClipboardReader);
+    expect(reader.requiredTool()).toContain("PowerShell (via WSL interop)");
+    expect(reader.requiredTool()).toContain("xclip");
   });
 });
 
@@ -144,6 +163,22 @@ describe("MacosClipboardReader", () => {
     it("returns true when clipboard info contains TIFF class", async () => {
       mockExec.mockResolvedValueOnce({
         stdout: "«class TIFF», 1024",
+        stderr: "",
+      });
+      expect(await reader.hasImage()).toBe(true);
+    });
+
+    it("returns true when clipboard info contains JPEG class", async () => {
+      mockExec.mockResolvedValueOnce({
+        stdout: "«class JPEG», 2048",
+        stderr: "",
+      });
+      expect(await reader.hasImage()).toBe(true);
+    });
+
+    it("returns true when clipboard info contains BMP class", async () => {
+      mockExec.mockResolvedValueOnce({
+        stdout: "«class BMP », 4096",
         stderr: "",
       });
       expect(await reader.hasImage()).toBe(true);
@@ -236,7 +271,15 @@ describe("LinuxClipboardReader", () => {
         ]);
       });
 
-      it("returns false when TARGETS do not include image/png", async () => {
+      it("returns true when TARGETS include image/jpeg but not image/png", async () => {
+        mockExec.mockResolvedValueOnce({
+          stdout: "TARGETS\nimage/jpeg\nTIMESTAMP",
+          stderr: "",
+        });
+        expect(await reader.hasImage()).toBe(true);
+      });
+
+      it("returns false when TARGETS have no image types", async () => {
         mockExec.mockResolvedValueOnce({
           stdout: "TARGETS\nUTF8_STRING\nTIMESTAMP",
           stderr: "",
@@ -322,7 +365,15 @@ describe("LinuxClipboardReader", () => {
         expect(mockExec).toHaveBeenCalledWith("wl-paste", ["--list-types"]);
       });
 
-      it("returns false when list-types does not include image/png", async () => {
+      it("returns true when list-types includes image/jpeg but not image/png", async () => {
+        mockExec.mockResolvedValueOnce({
+          stdout: "text/plain\nimage/jpeg",
+          stderr: "",
+        });
+        expect(await reader.hasImage()).toBe(true);
+      });
+
+      it("returns false when list-types has no image types", async () => {
         mockExec.mockResolvedValueOnce({
           stdout: "text/plain\ntext/html",
           stderr: "",
@@ -777,6 +828,376 @@ describe("PowerShellClipboardReader (shared base behaviour)", () => {
         "-Command",
         "echo ok",
       ]);
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 8. detectFormat() — MacosClipboardReader
+// ---------------------------------------------------------------------------
+describe("MacosClipboardReader detectFormat", () => {
+  let reader: MacosClipboardReader;
+
+  beforeEach(() => {
+    reader = new MacosClipboardReader();
+  });
+
+  it("returns 'png' when clipboard info contains «class PNGf»", async () => {
+    mockExec.mockResolvedValueOnce({
+      stdout: "«class PNGf», 42\n«class TIFF», 1024",
+      stderr: "",
+    });
+    expect(await reader.detectFormat()).toBe("png");
+  });
+
+  it("returns 'tiff' when clipboard info contains only «class TIFF»", async () => {
+    mockExec.mockResolvedValueOnce({
+      stdout: "«class TIFF», 1024\n«class ut16», 18",
+      stderr: "",
+    });
+    expect(await reader.detectFormat()).toBe("tiff");
+  });
+
+  it("returns 'jpeg' when clipboard info contains «class JPEG»", async () => {
+    mockExec.mockResolvedValueOnce({
+      stdout: "«class JPEG», 2048",
+      stderr: "",
+    });
+    expect(await reader.detectFormat()).toBe("jpeg");
+  });
+
+  it("returns 'jpeg' when clipboard info contains «class JPEf»", async () => {
+    mockExec.mockResolvedValueOnce({
+      stdout: "«class JPEf», 2048",
+      stderr: "",
+    });
+    expect(await reader.detectFormat()).toBe("jpeg");
+  });
+
+  it("returns 'bmp' when clipboard info contains «class BMP »", async () => {
+    mockExec.mockResolvedValueOnce({
+      stdout: "«class BMP », 4096",
+      stderr: "",
+    });
+    expect(await reader.detectFormat()).toBe("bmp");
+  });
+
+  it("prefers 'png' when clipboard has both «class PNGf» and «class TIFF»", async () => {
+    mockExec.mockResolvedValueOnce({
+      stdout: "«class TIFF», 1024\n«class PNGf», 42",
+      stderr: "",
+    });
+    expect(await reader.detectFormat()).toBe("png");
+  });
+
+  it("prefers 'png' over 'jpeg' when both present", async () => {
+    mockExec.mockResolvedValueOnce({
+      stdout: "«class JPEG», 2048\n«class PNGf», 42",
+      stderr: "",
+    });
+    expect(await reader.detectFormat()).toBe("png");
+  });
+
+  it("throws when no image data in clipboard", async () => {
+    mockExec.mockResolvedValueOnce({
+      stdout: "«class ut16», 18",
+      stderr: "",
+    });
+    await expect(reader.detectFormat()).rejects.toThrow(
+      "No image found in clipboard",
+    );
+  });
+
+  it("throws when osascript fails", async () => {
+    mockExec.mockRejectedValueOnce(new Error("osascript failed"));
+    await expect(reader.detectFormat()).rejects.toThrow("osascript failed");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 9. detectFormat() — LinuxClipboardReader (X11)
+// ---------------------------------------------------------------------------
+describe("LinuxClipboardReader detectFormat (X11)", () => {
+  let reader: LinuxClipboardReader;
+
+  beforeEach(() => {
+    reader = new LinuxClipboardReader("x11");
+  });
+
+  it("returns 'png' when TARGETS includes image/png", async () => {
+    mockExec.mockResolvedValueOnce({
+      stdout: "TARGETS\nimage/png\nimage/jpeg\nTIMESTAMP",
+      stderr: "",
+    });
+    expect(await reader.detectFormat()).toBe("png");
+  });
+
+  it("returns 'jpeg' when TARGETS includes image/jpeg but not image/png", async () => {
+    mockExec.mockResolvedValueOnce({
+      stdout: "TARGETS\nimage/jpeg\nTIMESTAMP",
+      stderr: "",
+    });
+    expect(await reader.detectFormat()).toBe("jpeg");
+  });
+
+  it("returns 'webp' when TARGETS includes image/webp only", async () => {
+    mockExec.mockResolvedValueOnce({
+      stdout: "TARGETS\nimage/webp\nTIMESTAMP",
+      stderr: "",
+    });
+    expect(await reader.detectFormat()).toBe("webp");
+  });
+
+  it("returns 'tiff' when TARGETS includes image/tiff", async () => {
+    mockExec.mockResolvedValueOnce({
+      stdout: "TARGETS\nimage/tiff\nTIMESTAMP",
+      stderr: "",
+    });
+    expect(await reader.detectFormat()).toBe("tiff");
+  });
+
+  it("returns 'bmp' when TARGETS includes image/bmp", async () => {
+    mockExec.mockResolvedValueOnce({
+      stdout: "TARGETS\nimage/bmp\nTIMESTAMP",
+      stderr: "",
+    });
+    expect(await reader.detectFormat()).toBe("bmp");
+  });
+
+  it("returns 'bmp' when TARGETS includes image/x-bmp", async () => {
+    mockExec.mockResolvedValueOnce({
+      stdout: "TARGETS\nimage/x-bmp\nTIMESTAMP",
+      stderr: "",
+    });
+    expect(await reader.detectFormat()).toBe("bmp");
+  });
+
+  it("returns 'unknown' when TARGETS has image/x-custom only", async () => {
+    mockExec.mockResolvedValueOnce({
+      stdout: "TARGETS\nimage/x-custom\nTIMESTAMP",
+      stderr: "",
+    });
+    expect(await reader.detectFormat()).toBe("unknown");
+  });
+
+  it("throws when TARGETS have no image types", async () => {
+    mockExec.mockResolvedValueOnce({
+      stdout: "TARGETS\nUTF8_STRING\nTIMESTAMP",
+      stderr: "",
+    });
+    await expect(reader.detectFormat()).rejects.toThrow(
+      "No image found in clipboard",
+    );
+  });
+
+  it("throws when xclip fails", async () => {
+    mockExec.mockRejectedValueOnce(new Error("no display"));
+    await expect(reader.detectFormat()).rejects.toThrow("no display");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 10. detectFormat() — LinuxClipboardReader (Wayland)
+// ---------------------------------------------------------------------------
+describe("LinuxClipboardReader detectFormat (Wayland)", () => {
+  let reader: LinuxClipboardReader;
+
+  beforeEach(() => {
+    reader = new LinuxClipboardReader("wayland");
+  });
+
+  it("returns 'png' for image/png", async () => {
+    mockExec.mockResolvedValueOnce({
+      stdout: "image/png\ntext/plain",
+      stderr: "",
+    });
+    expect(await reader.detectFormat()).toBe("png");
+  });
+
+  it("returns 'jpeg' for image/jpeg without image/png", async () => {
+    mockExec.mockResolvedValueOnce({
+      stdout: "image/jpeg\ntext/plain",
+      stderr: "",
+    });
+    expect(await reader.detectFormat()).toBe("jpeg");
+  });
+
+  it("returns 'unknown' for unrecognized image MIME type", async () => {
+    mockExec.mockResolvedValueOnce({
+      stdout: "image/x-unknown\ntext/plain",
+      stderr: "",
+    });
+    expect(await reader.detectFormat()).toBe("unknown");
+  });
+
+  it("throws when no image types present", async () => {
+    mockExec.mockResolvedValueOnce({
+      stdout: "text/plain\ntext/html",
+      stderr: "",
+    });
+    await expect(reader.detectFormat()).rejects.toThrow(
+      "No image found in clipboard",
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 11. detectFormat() — PowerShell readers (Windows + WSL)
+// ---------------------------------------------------------------------------
+describe("PowerShellClipboardReader detectFormat", () => {
+  describe("WindowsClipboardReader", () => {
+    let reader: WindowsClipboardReader;
+
+    beforeEach(() => {
+      reader = new WindowsClipboardReader();
+    });
+
+    it("returns 'png' when image is present", async () => {
+      mockExec.mockResolvedValueOnce({ stdout: "yes\r\n", stderr: "" });
+      expect(await reader.detectFormat()).toBe("png");
+    });
+
+    it("throws when no image in clipboard", async () => {
+      mockExec.mockResolvedValueOnce({ stdout: "no\r\n", stderr: "" });
+      await expect(reader.detectFormat()).rejects.toThrow(
+        "No image found in clipboard",
+      );
+    });
+  });
+
+  describe("WslClipboardReader", () => {
+    let reader: WslClipboardReader;
+
+    beforeEach(() => {
+      reader = new WslClipboardReader(
+        makePlatform({ os: "linux", isWSL: true, powershellPath: "/mnt/c/ps.exe" }),
+      );
+    });
+
+    it("returns 'png' when image is present (inherits from base)", async () => {
+      mockExec.mockResolvedValueOnce({ stdout: "yes\r\n", stderr: "" });
+      expect(await reader.detectFormat()).toBe("png");
+    });
+
+    it("throws when no image in clipboard (inherits from base)", async () => {
+      mockExec.mockResolvedValueOnce({ stdout: "no\r\n", stderr: "" });
+      await expect(reader.detectFormat()).rejects.toThrow(
+        "No image found in clipboard",
+      );
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 12. MacosOsascriptClipboardReader
+// ---------------------------------------------------------------------------
+describe("MacosOsascriptClipboardReader", () => {
+  let reader: MacosOsascriptClipboardReader;
+
+  beforeEach(() => {
+    reader = new MacosOsascriptClipboardReader();
+  });
+
+  it("requiredTool() returns 'osascript (built-in)'", () => {
+    expect(reader.requiredTool()).toBe("osascript (built-in)");
+  });
+
+  describe("isToolAvailable", () => {
+    it("returns true on darwin", async () => {
+      const original = process.platform;
+      Object.defineProperty(process, "platform", { value: "darwin" });
+      try {
+        expect(await reader.isToolAvailable()).toBe(true);
+      } finally {
+        Object.defineProperty(process, "platform", { value: original });
+      }
+    });
+
+    it("returns false on non-darwin", async () => {
+      const original = process.platform;
+      Object.defineProperty(process, "platform", { value: "linux" });
+      try {
+        expect(await reader.isToolAvailable()).toBe(false);
+      } finally {
+        Object.defineProperty(process, "platform", { value: original });
+      }
+    });
+  });
+
+  describe("hasImage", () => {
+    it("returns true when clipboard info contains PNGf class", async () => {
+      mockExec.mockResolvedValueOnce({
+        stdout: "«class PNGf», 42",
+        stderr: "",
+      });
+      expect(await reader.hasImage()).toBe(true);
+    });
+
+    it("returns true when clipboard info contains TIFF class", async () => {
+      mockExec.mockResolvedValueOnce({
+        stdout: "«class TIFF», 1024",
+        stderr: "",
+      });
+      expect(await reader.hasImage()).toBe(true);
+    });
+
+    it("returns false when no image class present", async () => {
+      mockExec.mockResolvedValueOnce({
+        stdout: "«class ut16», 18",
+        stderr: "",
+      });
+      expect(await reader.hasImage()).toBe(false);
+    });
+
+    it("returns false when osascript throws", async () => {
+      mockExec.mockRejectedValueOnce(new Error("command failed"));
+      expect(await reader.hasImage()).toBe(false);
+    });
+  });
+
+  describe("detectFormat", () => {
+    it("returns 'png' when image present", async () => {
+      mockExec.mockResolvedValueOnce({
+        stdout: "«class PNGf», 42",
+        stderr: "",
+      });
+      expect(await reader.detectFormat()).toBe("png");
+    });
+
+    it("throws when no image present", async () => {
+      mockExec.mockResolvedValueOnce({
+        stdout: "«class ut16», 18",
+        stderr: "",
+      });
+      await expect(reader.detectFormat()).rejects.toThrow(
+        "No image found in clipboard",
+      );
+    });
+  });
+
+  describe("readImage", () => {
+    it("returns buffer from osascript output", async () => {
+      const fakeImage = Buffer.from("OSASCRIPT-PNG");
+      // hasImage check
+      mockExec.mockResolvedValueOnce({ stdout: "«class PNGf», 42", stderr: "" });
+      // execBuffer -> osascript
+      mockExecBuffer.mockResolvedValueOnce({ stdout: fakeImage, stderr: "" });
+
+      const result = await reader.readImage();
+      expect(result).toEqual(fakeImage);
+      expect(mockExecBuffer).toHaveBeenCalledWith("osascript", [
+        "-e",
+        "set pngData to (the clipboard as «class PNGf»)",
+        "-e",
+        "return pngData",
+      ]);
+    });
+
+    it("throws when no image in clipboard", async () => {
+      mockExec.mockResolvedValueOnce({ stdout: "«class ut16», 18", stderr: "" });
+      await expect(reader.readImage()).rejects.toThrow(
+        "No image found in clipboard",
+      );
     });
   });
 });

@@ -1,5 +1,5 @@
 import * as fs from "fs";
-import { ClipboardReader } from "./types";
+import { ClipboardReader, ClipboardFormat } from "./types";
 import { exec } from "../util/exec";
 import { logger } from "../util/logger";
 
@@ -41,6 +41,15 @@ export abstract class PowerShellClipboardReader implements ClipboardReader {
     } catch {
       return false;
     }
+  }
+
+  async detectFormat(): Promise<ClipboardFormat> {
+    const has = await this.hasImage();
+    if (!has) {
+      throw new Error("No image found in clipboard");
+    }
+    // PowerShell's System.Drawing always re-encodes to PNG
+    return "png";
   }
 
   async readImage(): Promise<Buffer> {

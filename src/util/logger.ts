@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 
 export interface Logger {
   info(message: string): void;
-  warn(message: string): void;
+  warn(message: string, err?: unknown): void;
   error(message: string, err?: unknown): void;
   show(): void;
 }
@@ -24,8 +24,16 @@ export function createLogger(name: string): Logger {
       channel.appendLine(`${timestamp()} [INFO] ${message}`);
     },
 
-    warn(message: string): void {
-      channel.appendLine(`${timestamp()} [WARN] ${message}`);
+    warn(message: string, err?: unknown): void {
+      let line = `${timestamp()} [WARN] ${message}`;
+      if (err !== undefined) {
+        if (err instanceof Error && err.stack) {
+          line += `\n${err.stack}`;
+        } else {
+          line += `\n${String(err)}`;
+        }
+      }
+      channel.appendLine(line);
     },
 
     error(message: string, err?: unknown): void {

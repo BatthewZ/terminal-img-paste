@@ -1,3 +1,11 @@
+export type ClipboardFormat =
+  | "png"
+  | "jpeg"
+  | "tiff"
+  | "bmp"
+  | "webp"
+  | "unknown";
+
 export interface ClipboardReader {
   /** Human-readable name of the required CLI tool (e.g. "pngpaste", "xclip") */
   requiredTool(): string;
@@ -11,4 +19,8 @@ export interface ClipboardReader {
   /** Read image data from the clipboard and return it as a PNG Buffer.
    *  Throws if no image is available. */
   readImage(): Promise<Buffer>;
+
+  /** Detect the format of the image currently on the clipboard.
+   *  Throws if no image is available. */
+  detectFormat(): Promise<ClipboardFormat>;
 }
