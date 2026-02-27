@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import { workspace } from 'vscode';
@@ -8,7 +9,7 @@ vi.mock('../src/util/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
-import { createImageStore } from '../src/storage/imageStore';
+import { createImageStore, resolveFilenamePattern } from '../src/storage/imageStore';
 import { logger } from '../src/util/logger';
 
 const WORKSPACE_ROOT = '/test/workspace';
@@ -31,6 +32,7 @@ function resetConfig(): void {
     maxImages: 20,
     autoGitIgnore: true,
     sendNewline: false,
+    filenamePattern: 'img-{timestamp}',
   };
 }
 
@@ -697,6 +699,108 @@ describe('createImageStore', () => {
         '.my-images\n',
         'utf-8',
       );
+    });
+  });
+
+  describe('resolveFilenamePattern()', () => {
+    const BUF_A = Buffer.from('image-content-A');
+    const BUF_B = Buffer.from('image-content-B');
+
+    it('default pattern produces timestamp-based name (backward compatible)', () => {
+      const result = resolveFilenamePattern('img-{timestamp}', BUF_A, []);
+      expect(result).toMatch(/^img-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}$/);
+    });
+
+    it('{date} placeholder resolves to YYYY-MM-DD format', () => {
+      const result = resolveFilenamePattern('shot-{date}', BUF_A, []);
+      // also logs collision warning since {date} alone is not unique
+      expect(result).toMatch(/^shot-\d{4}-\d{2}-\d{2}$/);
+    });
+
+    it('{time} placeholder resolves to HH-mm-ss format', () => {
+      const result = resolveFilenamePattern('shot-{time}', BUF_A, []);
+      expect(result).toMatch(/^shot-\d{2}-\d{2}-\d{2}$/);
+    });
+
+    it('{hash} produces consistent 8-char hex for same content', () => {
+      const r1 = resolveFilenamePattern('img-{hash}', BUF_A, []);
+      const r2 = resolveFilenamePattern('img-{hash}', BUF_A, []);
+      expect(r1).toBe(r2);
+      const hash = r1.replace('img-', '');
+      expect(hash).toMatch(/^[0-9a-f]{8}$/);
+    });
+
+    it('{hash} produces different values for different content', () => {
+      const r1 = resolveFilenamePattern('img-{hash}', BUF_A, []);
+      const r2 = resolveFilenamePattern('img-{hash}', BUF_B, []);
+      expect(r1).not.toBe(r2);
+    });
+
+    it('{hash} matches expected sha256 prefix', () => {
+      const expected = crypto.createHash('sha256').update(BUF_A).digest('hex').slice(0, 8);
+      const result = resolveFilenamePattern('img-{hash}', BUF_A, []);
+      expect(result).toBe(`img-${expected}`);
+    });
+
+    it('{n} starts at 1 with no existing files', () => {
+      const result = resolveFilenamePattern('shot-{n}', BUF_A, []);
+      expect(result).toBe('shot-1');
+    });
+
+    it('{n} auto-increments based on existing files', () => {
+      const existing = ['shot-1.png', 'shot-2.png', 'shot-3.png'];
+      const result = resolveFilenamePattern('shot-{n}', BUF_A, existing);
+      expect(result).toBe('shot-4');
+    });
+
+    it('{n} handles gaps in sequence', () => {
+      const existing = ['shot-1.png', 'shot-2.png', 'shot-5.png'];
+      const result = resolveFilenamePattern('shot-{n}', BUF_A, existing);
+      expect(result).toBe('shot-6');
+    });
+
+    it('combined pattern like screenshot-{date}-{n} works', () => {
+      const existing = ['screenshot-2026-02-27-1.png', 'screenshot-2026-02-27-2.png'];
+      const result = resolveFilenamePattern('screenshot-{date}-{n}', BUF_A, existing);
+      expect(result).toMatch(/^screenshot-\d{4}-\d{2}-\d{2}-3$/);
+    });
+
+    it('warns when pattern lacks uniqueness placeholders', () => {
+      resolveFilenamePattern('shot-{date}', BUF_A, []);
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('lacks a uniqueness placeholder'),
+      );
+    });
+
+    it('empty pattern falls back to default', () => {
+      const result = resolveFilenamePattern('', BUF_A, []);
+      expect(result).toMatch(/^img-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}$/);
+    });
+
+    it('pattern with no placeholders gets timestamp appended', () => {
+      const result = resolveFilenamePattern('my-screenshot', BUF_A, []);
+      expect(result).toMatch(/^my-screenshot-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}$/);
+    });
+  });
+
+  describe('save() with filenamePattern', () => {
+    it('uses configured filenamePattern for filenames', async () => {
+      setConfig('filenamePattern', 'capture-{hash}');
+      const store = createImageStore();
+      const result = await store.save(FAKE_PNG);
+
+      // Should use hash-based naming instead of timestamp
+      expect(result).toMatch(/capture-[0-9a-f]{8}\.png$/);
+    });
+
+    it('file extension is correctly appended after pattern resolution', async () => {
+      setConfig('filenamePattern', 'shot-{n}');
+      const store = createImageStore();
+
+      const FAKE_JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]);
+      const result = await store.save(FAKE_JPEG, 'jpeg');
+
+      expect(result).toMatch(/shot-1\.jpg$/);
     });
   });
 });

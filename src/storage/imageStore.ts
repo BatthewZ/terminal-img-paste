@@ -1,3 +1,4 @@
+import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
@@ -117,8 +118,62 @@ function getImageFolderPath(): string {
   return resolved;
 }
 
-function generateFileName(format: ClipboardFormat): string {
+const DEFAULT_FILENAME_PATTERN = 'img-{timestamp}';
+
+/** Placeholders that guarantee unique filenames for rapid consecutive pastes. */
+const UNIQUENESS_PLACEHOLDERS = ['{timestamp}', '{n}', '{hash}'];
+
+/**
+ * Resolve a filename pattern by replacing placeholders with actual values.
+ * Exported for unit testing.
+ */
+export function resolveFilenamePattern(
+  pattern: string,
+  imageBuffer: Buffer,
+  existingFiles: string[],
+): string {
+  if (!pattern) {
+    pattern = DEFAULT_FILENAME_PATTERN;
+  }
+
+  const hasPlaceholder = pattern.includes('{');
+  if (!hasPlaceholder) {
+    // No placeholders at all — append timestamp to avoid collisions
+    const ts = formatTimestamp(new Date());
+    pattern = `${pattern}-${ts}`;
+  } else if (!UNIQUENESS_PLACEHOLDERS.some((p) => pattern.includes(p))) {
+    logger.warn(
+      `Filename pattern "${pattern}" lacks a uniqueness placeholder (${UNIQUENESS_PLACEHOLDERS.join(', ')}). Filenames may collide.`,
+    );
+  }
+
   const now = new Date();
+  let result = pattern;
+
+  // {timestamp}
+  result = result.replace(/\{timestamp\}/g, formatTimestamp(now));
+
+  // {date}
+  result = result.replace(/\{date\}/g, formatDate(now));
+
+  // {time}
+  result = result.replace(/\{time\}/g, formatTime(now));
+
+  // {hash}
+  if (result.includes('{hash}')) {
+    const hash = crypto.createHash('sha256').update(imageBuffer).digest('hex').slice(0, 8);
+    result = result.replace(/\{hash\}/g, hash);
+  }
+
+  // {n}
+  if (result.includes('{n}')) {
+    result = resolveSequentialNumber(result, existingFiles);
+  }
+
+  return result;
+}
+
+function formatTimestamp(now: Date): string {
   const y = now.getFullYear();
   const mo = String(now.getMonth() + 1).padStart(2, '0');
   const d = String(now.getDate()).padStart(2, '0');
@@ -126,8 +181,59 @@ function generateFileName(format: ClipboardFormat): string {
   const mi = String(now.getMinutes()).padStart(2, '0');
   const s = String(now.getSeconds()).padStart(2, '0');
   const ms = String(now.getMilliseconds()).padStart(3, '0');
+  return `${y}-${mo}-${d}T${h}-${mi}-${s}-${ms}`;
+}
+
+function formatDate(now: Date): string {
+  const y = now.getFullYear();
+  const mo = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${mo}-${d}`;
+}
+
+function formatTime(now: Date): string {
+  const h = String(now.getHours()).padStart(2, '0');
+  const mi = String(now.getMinutes()).padStart(2, '0');
+  const s = String(now.getSeconds()).padStart(2, '0');
+  return `${h}-${mi}-${s}`;
+}
+
+/**
+ * Replace `{n}` with the next sequential number.
+ * Scans existing files in the folder to determine the highest number used so far.
+ */
+function resolveSequentialNumber(pattern: string, existingFiles: string[]): string {
+  // Build a regex from the pattern that captures the number where {n} is
+  const escaped = pattern
+    .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    .replace(/\\{n\\}/g, '(\\d+)');
+  const regex = new RegExp(`^${escaped}`);
+
+  let maxN = 0;
+  for (const file of existingFiles) {
+    // Strip extension for matching
+    const baseName = file.replace(/\.[^.]+$/, '');
+    const match = baseName.match(regex);
+    if (match && match[1]) {
+      const num = parseInt(match[1], 10);
+      if (num > maxN) {
+        maxN = num;
+      }
+    }
+  }
+
+  return pattern.replace(/\{n\}/g, String(maxN + 1));
+}
+
+function generateFileName(
+  format: ClipboardFormat,
+  imageBuffer: Buffer,
+  existingFiles: string[],
+): string {
+  const pattern = getConfig().get<string>('filenamePattern', DEFAULT_FILENAME_PATTERN);
+  const baseName = resolveFilenamePattern(pattern, imageBuffer, existingFiles);
   const ext = formatToExtension(format);
-  return `img-${y}-${mo}-${d}T${h}-${mi}-${s}-${ms}${ext}`;
+  return `${baseName}${ext}`;
 }
 
 /**
@@ -164,7 +270,14 @@ export function createImageStore(): ImageStore {
       // Verify the resolved folder stays within the workspace
       await assertInsideWorkspace(folder, root);
 
-      const fileName = generateFileName(format);
+      let existingFiles: string[];
+      try {
+        existingFiles = await fs.promises.readdir(folder);
+      } catch {
+        existingFiles = [];
+      }
+
+      const fileName = generateFileName(format, imageBuffer, existingFiles);
       const filePath = path.join(folder, fileName);
       await writeSecureFile(filePath, imageBuffer);
 

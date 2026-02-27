@@ -71,6 +71,11 @@
           "default": "auto",
           "description": "Image save format. 'auto' preserves native format, 'png' or 'jpeg' forces conversion."
         },
+        "terminalImgPaste.filenamePattern": {
+          "type": "string",
+          "default": "img-{timestamp}",
+          "description": "Filename pattern for saved images. Placeholders: {timestamp}, {date}, {time}, {n}, {hash}"
+        },
         "terminalImgPaste.warnOnRemote": {
           "type": "boolean",
           "default": true,

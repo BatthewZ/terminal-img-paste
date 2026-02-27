@@ -22,6 +22,7 @@ function resetConfig(): void {
     maxImages: 20,
     autoGitIgnore: true,
     sendNewline: false,
+    filenamePattern: 'img-{timestamp}',
   };
 }
 
@@ -194,5 +195,38 @@ describe('imageStore integration (real fs)', () => {
     expect(path1).not.toBe(path2);
     expect(fs.existsSync(path1)).toBe(true);
     expect(fs.existsSync(path2)).toBe(true);
+  });
+
+  it('save with {n} pattern produces sequential numbering on real filesystem', async () => {
+    setConfig('filenamePattern', 'shot-{n}');
+    const store = createImageStore();
+
+    const p1 = await store.save(fakePng('first'));
+    const p2 = await store.save(fakePng('second'));
+    const p3 = await store.save(fakePng('third'));
+
+    expect(p1).toMatch(/shot-1\.png$/);
+    expect(p2).toMatch(/shot-2\.png$/);
+    expect(p3).toMatch(/shot-3\.png$/);
+    expect(fs.existsSync(p1)).toBe(true);
+    expect(fs.existsSync(p2)).toBe(true);
+    expect(fs.existsSync(p3)).toBe(true);
+  });
+
+  it('save with {hash} pattern produces content-addressed naming', async () => {
+    setConfig('filenamePattern', 'img-{hash}');
+    const store = createImageStore();
+
+    const data1 = fakePng('content-aaa');
+    const data2 = fakePng('content-bbb');
+
+    const p1 = await store.save(data1);
+    const p2 = await store.save(data2);
+
+    expect(p1).toMatch(/img-[0-9a-f]{8}\.png$/);
+    expect(p2).toMatch(/img-[0-9a-f]{8}\.png$/);
+    expect(p1).not.toBe(p2);
+    expect(fs.existsSync(p1)).toBe(true);
+    expect(fs.existsSync(p2)).toBe(true);
   });
 });

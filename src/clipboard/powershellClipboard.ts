@@ -8,7 +8,7 @@ const PS_HAS_IMAGE =
   "Add-Type -AssemblyName System.Windows.Forms; if ([System.Windows.Forms.Clipboard]::ContainsImage()) { echo 'yes' } else { echo 'no' }";
 
 /** PowerShell script that saves the clipboard image to a temp file and outputs its path. */
-export const PS_READ_IMAGE =
+const PS_READ_IMAGE =
   "Add-Type -AssemblyName System.Windows.Forms; $img = [System.Windows.Forms.Clipboard]::GetImage(); if ($img -eq $null) { exit 1 }; $tmp = [System.IO.Path]::GetTempFileName(); $img.Save($tmp, [System.Drawing.Imaging.ImageFormat]::Png); Write-Output $tmp";
 
 /**
@@ -60,15 +60,27 @@ export abstract class PowerShellClipboardReader implements ClipboardReader {
       throw new Error("No image found in clipboard");
     }
 
-    const result = await exec(this.powershellExe, [
-      "-EncodedCommand",
-      encodePowerShellCommand(PS_READ_IMAGE),
-    ]);
+    let tempPath: string;
+    try {
+      const result = await exec(this.powershellExe, [
+        "-EncodedCommand",
+        encodePowerShellCommand(PS_READ_IMAGE),
+      ]);
+      tempPath = result.stdout.trim();
+    } catch (err) {
+      throw new Error(
+        `PowerShell execution failed: ${err instanceof Error ? err.message : err}`,
+      );
+    }
 
-    const localPath = await this.resolveTempPath(result.stdout.trim());
+    const localPath = await this.resolveTempPath(tempPath);
     try {
       const data = await fs.promises.readFile(localPath);
       return { data, format: "png" };
+    } catch (err) {
+      throw new Error(
+        `Temp file read failed: could not read "${localPath}": ${err instanceof Error ? err.message : err}`,
+      );
     } finally {
       fs.promises.unlink(localPath).catch((err) => {
         logger.warn(`Failed to clean up temp file: ${localPath}`, err);
