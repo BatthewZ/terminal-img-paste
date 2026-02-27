@@ -58,6 +58,10 @@ vi.mock('../src/views/previewPanel', () => ({
   showImagePreview: vi.fn().mockResolvedValue(true),
 }));
 
+vi.mock('../src/views/dropZoneProvider', () => ({
+  DropZoneProvider: vi.fn(),
+}));
+
 // Import after mocks
 import { activate, deactivate } from '../src/extension';
 import { createClipboardReader } from '../src/clipboard/index';
@@ -73,7 +77,10 @@ import { notify } from '../src/util/notify';
 // Helpers
 // ---------------------------------------------------------------------------
 function makeContext() {
-  return { subscriptions: [] } as unknown as import('vscode').ExtensionContext;
+  return {
+    subscriptions: [],
+    extensionUri: { fsPath: '/test/extension', scheme: 'file' },
+  } as unknown as import('vscode').ExtensionContext;
 }
 
 /** Build a mock ClipboardReader with sensible defaults. */
@@ -137,8 +144,8 @@ describe('activate', () => {
   it('pushes all disposables to context.subscriptions', () => {
     const ctx = makeContext();
     activate(ctx);
-    // 3 command disposables + 1 EventEmitter (pasteEmitter)
-    expect(ctx.subscriptions).toHaveLength(4);
+    // 3 command disposables + 1 EventEmitter (pasteEmitter) + 1 dropZone view provider
+    expect(ctx.subscriptions).toHaveLength(5);
   });
 
   it('returns API object with all expected methods', () => {

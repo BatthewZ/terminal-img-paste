@@ -10,13 +10,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    include: ['test/**/*.test.ts'],
-    exclude: ['test/integration/**'],
+    include: ['test/integration/**/*.test.ts'],
     mockReset: true,
-    coverage: {
-      provider: 'v8',
-      include: ['src/**/*.ts'],
-      exclude: ['src/**/*.test.ts', 'src/__mocks__/**'],
-    },
   },
 });

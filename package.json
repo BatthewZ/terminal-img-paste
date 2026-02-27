@@ -16,6 +16,24 @@
     "onStartupFinished"
   ],
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "terminalImgPaste",
+          "title": "Terminal Image Paste",
+          "icon": "assets/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "terminalImgPaste": [
+        {
+          "type": "webview",
+          "id": "terminalImgPaste.dropZone",
+          "name": "Drop Zone"
+        }
+      ]
+    },
     "commands": [
       {
         "command": "terminalImgPaste.pasteImage",
@@ -110,6 +128,7 @@
     "watch": "node esbuild.js --watch",
     "lint": "eslint src/",
     "test": "vitest run",
+    "test:integration": "RUN_INTEGRATION=1 vitest run --config vitest.integration.config.ts",
     "package": "vsce package"
   },
   "devDependencies": {

@@ -56,12 +56,50 @@ function createMockWebviewPanel() {
 // Store last created panel for test access
 let __lastCreatedPanel: ReturnType<typeof createMockWebviewPanel> | null = null;
 
+/** Factory that creates a mock WebviewView for sidebar panel tests. */
+function createMockWebviewView() {
+  const messageListeners: Array<(msg: unknown) => void> = [];
+  const disposeListeners: Array<() => void> = [];
+
+  const view = {
+    webview: {
+      html: '',
+      options: {} as Record<string, unknown>,
+      onDidReceiveMessage: vi.fn((listener: (msg: unknown) => void) => {
+        messageListeners.push(listener);
+        return { dispose: vi.fn() };
+      }),
+      postMessage: vi.fn(),
+      asWebviewUri: vi.fn((uri: { fsPath: string }) => uri.fsPath),
+      cspSource: 'https://test-csp-source',
+    },
+    onDidDispose: vi.fn((listener: () => void) => {
+      disposeListeners.push(listener);
+      return { dispose: vi.fn() };
+    }),
+    dispose: vi.fn(() => {
+      disposeListeners.forEach((l) => l());
+    }),
+    // Test helpers
+    __simulateMessage: (msg: unknown) => {
+      messageListeners.forEach((l) => l(msg));
+    },
+    __simulateDispose: () => {
+      disposeListeners.forEach((l) => l());
+    },
+  };
+  return view;
+}
+
+let __lastCreatedWebviewView: ReturnType<typeof createMockWebviewView> | null = null;
+
 export const window = {
   createOutputChannel: vi.fn(() => outputChannel),
   createWebviewPanel: vi.fn((..._args: unknown[]) => {
     __lastCreatedPanel = createMockWebviewPanel();
     return __lastCreatedPanel;
   }),
+  registerWebviewViewProvider: vi.fn(() => ({ dispose: vi.fn() })),
   showErrorMessage: vi.fn(),
   showWarningMessage: vi.fn(),
   showInformationMessage: vi.fn(),
@@ -104,6 +142,10 @@ export const env: { remoteName: string | undefined } = {
 
 export const Uri = {
   file: vi.fn((path: string) => ({ fsPath: path, scheme: 'file' })),
+  joinPath: vi.fn((base: { fsPath: string }, ...segments: string[]) => {
+    const joined = [base.fsPath, ...segments].join('/');
+    return { fsPath: joined, scheme: 'file' };
+  }),
 };
 
 export class EventEmitter<T> {
@@ -172,4 +214,22 @@ export function __getLastCreatedPanel() {
 // Helper to clear last panel reference
 export function __clearLastPanel(): void {
   __lastCreatedPanel = null;
+}
+
+// Helper to create a mock WebviewView for testing sidebar providers
+export function __createMockWebviewView() {
+  __lastCreatedWebviewView = createMockWebviewView();
+  return __lastCreatedWebviewView;
+}
+
+// Helper to clear last webview view reference
+export function __clearLastWebviewView(): void {
+  __lastCreatedWebviewView = null;
+}
+
+// CancellationToken stub for tests
+export class CancellationTokenSource {
+  token = { isCancellationRequested: false, onCancellationRequested: vi.fn() };
+  cancel = vi.fn();
+  dispose = vi.fn();
 }

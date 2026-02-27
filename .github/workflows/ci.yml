@@ -1,0 +1,56 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  unit-tests:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node: [20]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - run: npm ci
+      - run: npm run compile
+      - run: npm test
+
+  integration-tests:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            install: "sudo apt-get update && sudo apt-get install -y xclip xvfb"
+            display: ":99"
+            pre: "Xvfb :99 -screen 0 1024x768x24 &"
+          - os: macos-latest
+            install: "brew install pngpaste"
+            display: ""
+            pre: ""
+          - os: windows-latest
+            install: ""
+            display: ""
+            pre: ""
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: npm run compile
+      - name: Install clipboard tools
+        if: matrix.install != ''
+        run: ${{ matrix.install }}
+      - name: Pre-test setup
+        if: matrix.pre != ''
+        run: ${{ matrix.pre }}
+      - name: Run integration tests
+        run: npm run test:integration
+        env:
+          RUN_INTEGRATION: "1"
+          DISPLAY: ${{ matrix.display }}
+    continue-on-error: true
