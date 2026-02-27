@@ -3,8 +3,14 @@
 src/**
 test/**
 node_modules/**
+swarm/**
+.github/**
+.claude/**
 .gitignore
 tsconfig.json
 esbuild.js
 eslint.config.mjs
+vitest.config.ts
+vitest.integration.config.ts
+CLAUDE.md
 **/*.map
