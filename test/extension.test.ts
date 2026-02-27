@@ -37,6 +37,15 @@ vi.mock('../src/util/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), show: vi.fn() },
 }));
 
+vi.mock('../src/util/notify', () => ({
+  notify: {
+    statusBar: vi.fn(),
+    info: vi.fn(),
+    warning: vi.fn().mockResolvedValue(undefined),
+    error: vi.fn(),
+  },
+}));
+
 vi.mock('../src/image/convert', () => ({
   convertImage: vi.fn(async (data: Buffer, format: string) => ({ data, format })),
 }));
@@ -53,6 +62,7 @@ import { insertPathToTerminal } from '../src/terminal/insertPath';
 import { convertImage } from '../src/image/convert';
 import { detectRemoteContext } from '../src/platform/remote';
 import { logger } from '../src/util/logger';
+import { notify } from '../src/util/notify';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -151,7 +161,7 @@ describe('activate', () => {
 
     // Let the promise chain settle
     await vi.waitFor(() => {
-      expect(window.showWarningMessage).toHaveBeenCalledWith(
+      expect(notify.warning).toHaveBeenCalledWith(
         expect.stringContaining('not found'),
       );
     });
@@ -207,7 +217,7 @@ describe('pasteImage command handler', () => {
     const handler = __getRegisteredCommand('terminalImgPaste.pasteImage')!;
     await handler();
 
-    expect(window.setStatusBarMessage).toHaveBeenCalledWith(
+    expect(notify.statusBar).toHaveBeenCalledWith(
       'Image pasted to terminal',
       3000,
     );
@@ -223,7 +233,7 @@ describe('pasteImage command handler', () => {
     const handler = __getRegisteredCommand('terminalImgPaste.pasteImage')!;
     await handler();
 
-    expect(window.showInformationMessage).toHaveBeenCalledWith(
+    expect(notify.info).toHaveBeenCalledWith(
       'No image found in clipboard.',
     );
     expect(insertPathToTerminal).not.toHaveBeenCalled();
@@ -243,7 +253,7 @@ describe('pasteImage command handler', () => {
     const handler = __getRegisteredCommand('terminalImgPaste.pasteImage')!;
     await handler();
 
-    expect(window.showWarningMessage).toHaveBeenCalledWith(
+    expect(notify.warning).toHaveBeenCalledWith(
       expect.stringContaining('is not installed'),
     );
     expect(insertPathToTerminal).not.toHaveBeenCalled();
@@ -259,7 +269,7 @@ describe('pasteImage command handler', () => {
     const handler = __getRegisteredCommand('terminalImgPaste.pasteImage')!;
     await handler();
 
-    expect(window.showErrorMessage).toHaveBeenCalledWith(
+    expect(notify.error).toHaveBeenCalledWith(
       expect.stringContaining('pngpaste crashed'),
     );
   });
@@ -274,7 +284,7 @@ describe('pasteImage command handler', () => {
     const handler = __getRegisteredCommand('terminalImgPaste.pasteImage')!;
     await handler();
 
-    expect(window.showErrorMessage).toHaveBeenCalledWith(
+    expect(notify.error).toHaveBeenCalledWith(
       expect.stringContaining('No workspace folder is open'),
     );
   });
@@ -438,7 +448,7 @@ describe('sendPathToTerminal command handler', () => {
     const handler = __getRegisteredCommand('terminalImgPaste.sendPathToTerminal')!;
     await handler(undefined);
 
-    expect(window.showErrorMessage).toHaveBeenCalledWith(
+    expect(notify.error).toHaveBeenCalledWith(
       expect.stringContaining('No file selected'),
     );
     expect(insertPathToTerminal).not.toHaveBeenCalled();
@@ -449,7 +459,7 @@ describe('sendPathToTerminal command handler', () => {
     const handler = __getRegisteredCommand('terminalImgPaste.sendPathToTerminal')!;
     await handler({ fsPath: '/home/user/photo.png' });
 
-    expect(window.setStatusBarMessage).toHaveBeenCalledWith(
+    expect(notify.statusBar).toHaveBeenCalledWith(
       'Path sent to terminal',
       3000,
     );

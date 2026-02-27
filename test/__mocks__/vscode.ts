@@ -36,6 +36,7 @@ const configValues: Record<string, unknown> = {
   sendNewline: false,
   saveFormat: 'auto',
   warnOnRemote: true,
+  notifications: 'all',
 };
 
 export const workspace = {
@@ -71,6 +72,7 @@ export function __resetConfig(): void {
   configValues.sendNewline = false;
   configValues.saveFormat = 'auto';
   configValues.warnOnRemote = true;
+  configValues.notifications = 'all';
 }
 
 // Helper to set remote name for testing

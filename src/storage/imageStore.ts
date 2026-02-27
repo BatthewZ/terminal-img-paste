@@ -6,6 +6,8 @@ import { logger } from '../util/logger';
 import { writeSecureFile } from '../util/fs';
 import type { ClipboardFormat } from '../clipboard/types';
 
+export type OrganizeFolders = 'flat' | 'daily' | 'monthly';
+
 export interface ImageStore {
   /** Save an image buffer to the image folder. Returns the absolute file path. */
   save(imageBuffer: Buffer, format?: ClipboardFormat): Promise<string>;
@@ -252,6 +254,56 @@ async function assertInsideWorkspace(target: string, root: string): Promise<stri
   return realTarget;
 }
 
+/**
+ * Compute the subdirectory name based on the organizeFolders setting.
+ * Exported for unit testing.
+ */
+export function getSubdirectory(organize: OrganizeFolders, now: Date = new Date()): string {
+  switch (organize) {
+    case 'daily':
+      return formatDate(now);
+    case 'monthly':
+      return formatDate(now).substring(0, 7);
+    case 'flat':
+    default:
+      return '';
+  }
+}
+
+/** Recursively collect all image files under a directory. */
+async function collectImagesRecursive(folder: string): Promise<{ filePath: string; name: string }[]> {
+  const results: { filePath: string; name: string }[] = [];
+  let entries: fs.Dirent[];
+  try {
+    entries = await fs.promises.readdir(folder, { withFileTypes: true });
+  } catch {
+    return results;
+  }
+  for (const entry of entries) {
+    const fullPath = path.join(folder, entry.name);
+    if (entry.isDirectory()) {
+      results.push(...(await collectImagesRecursive(fullPath)));
+    } else if (IMAGE_EXTENSIONS.some((ext) => entry.name.endsWith(ext))) {
+      results.push({ filePath: fullPath, name: entry.name });
+    }
+  }
+  return results;
+}
+
+/** Remove a directory if it is empty. Never removes the root image folder. */
+async function removeEmptyDirs(dir: string, rootFolder: string): Promise<void> {
+  if (dir === rootFolder) return;
+  try {
+    const remaining = await fs.promises.readdir(dir);
+    if (remaining.length === 0) {
+      await fs.promises.rmdir(dir);
+      logger.info(`Removed empty directory: ${dir}`);
+    }
+  } catch {
+    // Ignore errors during cleanup
+  }
+}
+
 export function createImageStore(): ImageStore {
   return {
     async save(imageBuffer: Buffer, format: ClipboardFormat = 'png'): Promise<string> {
@@ -264,15 +316,25 @@ export function createImageStore(): ImageStore {
       // Verify the resolved folder stays within the workspace
       await assertInsideWorkspace(folder, root);
 
+      // Determine subdirectory based on organizeFolders setting
+      const organize = getConfig().get<OrganizeFolders>('organizeFolders', 'flat');
+      const subdir = getSubdirectory(organize);
+      const saveFolder = subdir ? path.join(folder, subdir) : folder;
+
+      if (subdir) {
+        await fs.promises.mkdir(saveFolder, { recursive: true });
+        await assertInsideWorkspace(saveFolder, root);
+      }
+
       let existingFiles: string[];
       try {
-        existingFiles = await fs.promises.readdir(folder);
+        existingFiles = await fs.promises.readdir(saveFolder);
       } catch {
         existingFiles = [];
       }
 
       const fileName = generateFileName(format, imageBuffer, existingFiles);
-      const filePath = path.join(folder, fileName);
+      const filePath = path.join(saveFolder, fileName);
       await writeSecureFile(filePath, imageBuffer);
 
       // Defense-in-depth: verify the saved file also stays within the workspace
@@ -293,31 +355,59 @@ export function createImageStore(): ImageStore {
         Number.isInteger(rawMaxImages) && rawMaxImages > 0
           ? rawMaxImages
           : 20;
+      const organize = config.get<OrganizeFolders>('organizeFolders', 'flat');
       const folder = getImageFolderPath();
 
-      let entries: string[];
-      try {
-        entries = await fs.promises.readdir(folder);
-      } catch {
-        return;
-      }
-
-      const imageFiles = entries
-        .filter((f) => IMAGE_EXTENSIONS.some((ext) => f.endsWith(ext)))
-        .sort();
-
-      if (imageFiles.length <= maxImages) {
-        return;
-      }
-
-      const toDelete = imageFiles.slice(0, imageFiles.length - maxImages);
-      for (const file of toDelete) {
-        const filePath = path.join(folder, file);
+      if (organize === 'flat') {
+        // Flat cleanup — original logic
+        let entries: string[];
         try {
-          await fs.promises.unlink(filePath);
-          logger.info(`Deleted old image: ${filePath}`);
-        } catch (err) {
-          logger.warn(`Failed to delete old image: ${filePath}`, err);
+          entries = await fs.promises.readdir(folder);
+        } catch {
+          return;
+        }
+
+        const imageFiles = entries
+          .filter((f) => IMAGE_EXTENSIONS.some((ext) => f.endsWith(ext)))
+          .sort();
+
+        if (imageFiles.length <= maxImages) {
+          return;
+        }
+
+        const toDelete = imageFiles.slice(0, imageFiles.length - maxImages);
+        for (const file of toDelete) {
+          const filePath = path.join(folder, file);
+          try {
+            await fs.promises.unlink(filePath);
+            logger.info(`Deleted old image: ${filePath}`);
+          } catch (err) {
+            logger.warn(`Failed to delete old image: ${filePath}`, err);
+          }
+        }
+      } else {
+        // Recursive cleanup across subdirectories
+        const allImages = await collectImagesRecursive(folder);
+        allImages.sort((a, b) => a.name.localeCompare(b.name));
+
+        if (allImages.length <= maxImages) return;
+
+        const toDelete = allImages.slice(0, allImages.length - maxImages);
+        const affectedDirs = new Set<string>();
+
+        for (const img of toDelete) {
+          try {
+            await fs.promises.unlink(img.filePath);
+            logger.info(`Deleted old image: ${img.filePath}`);
+            affectedDirs.add(path.dirname(img.filePath));
+          } catch (err) {
+            logger.warn(`Failed to delete old image: ${img.filePath}`, err);
+          }
+        }
+
+        // Clean up empty subdirectories
+        for (const dir of affectedDirs) {
+          await removeEmptyDirs(dir, folder);
         }
       }
     },

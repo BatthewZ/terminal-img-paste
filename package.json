@@ -76,10 +76,22 @@
           "default": "img-{timestamp}",
           "description": "Filename pattern for saved images. Placeholders: {timestamp}, {date}, {time}, {n}, {hash}"
         },
+        "terminalImgPaste.organizeFolders": {
+          "type": "string",
+          "enum": ["flat", "daily", "monthly"],
+          "default": "flat",
+          "description": "How to organize saved images. 'flat' puts all images in the root folder. 'daily' creates YYYY-MM-DD subdirectories. 'monthly' creates YYYY-MM subdirectories."
+        },
         "terminalImgPaste.warnOnRemote": {
           "type": "boolean",
           "default": true,
           "description": "Show a warning when pasting clipboard images in a remote terminal (SSH, container, etc.) since the saved path may not be accessible remotely."
+        },
+        "terminalImgPaste.notifications": {
+          "type": "string",
+          "enum": ["all", "errors", "none"],
+          "default": "all",
+          "description": "Control notification verbosity. 'all' shows all messages (status bar, warnings, errors). 'errors' suppresses success and warning messages; only shows errors. 'none' routes all feedback to the output channel only."
         }
       }
     }

@@ -9,7 +9,7 @@ vi.mock('../src/util/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
-import { createImageStore, resolveFilenamePattern } from '../src/storage/imageStore';
+import { createImageStore, resolveFilenamePattern, getSubdirectory } from '../src/storage/imageStore';
 import { logger } from '../src/util/logger';
 
 const WORKSPACE_ROOT = '/test/workspace';
@@ -801,6 +801,203 @@ describe('createImageStore', () => {
       const result = await store.save(FAKE_JPEG, 'jpeg');
 
       expect(result).toMatch(/shot-1\.jpg$/);
+    });
+  });
+
+  describe('getSubdirectory()', () => {
+    const fixedDate = new Date(2026, 1, 27, 14, 30, 45); // Feb 27, 2026
+
+    it('flat mode returns empty string', () => {
+      expect(getSubdirectory('flat', fixedDate)).toBe('');
+    });
+
+    it('daily mode returns YYYY-MM-DD format', () => {
+      expect(getSubdirectory('daily', fixedDate)).toBe('2026-02-27');
+    });
+
+    it('monthly mode returns YYYY-MM format', () => {
+      expect(getSubdirectory('monthly', fixedDate)).toBe('2026-02');
+    });
+
+    it('unknown value falls back to flat (empty string)', () => {
+      expect(getSubdirectory('bogus' as any, fixedDate)).toBe('');
+    });
+
+    it('daily mode zero-pads single-digit month and day', () => {
+      const jan1 = new Date(2026, 0, 5);
+      expect(getSubdirectory('daily', jan1)).toBe('2026-01-05');
+    });
+
+    it('monthly mode zero-pads single-digit month', () => {
+      const mar = new Date(2026, 2, 15);
+      expect(getSubdirectory('monthly', mar)).toBe('2026-03');
+    });
+  });
+
+  describe('save() with organizeFolders', () => {
+    it('daily mode creates date subdirectory and saves file inside it', async () => {
+      setConfig('organizeFolders', 'daily');
+      const store = createImageStore();
+
+      const result = await store.save(FAKE_PNG);
+
+      // File should be in a YYYY-MM-DD subdirectory
+      expect(result).toMatch(
+        /\.tip-images[/\\]\d{4}-\d{2}-\d{2}[/\\]img-.*\.png$/,
+      );
+      // mkdir should have been called for the subdirectory
+      expect(fs.promises.mkdir).toHaveBeenCalledWith(
+        expect.stringMatching(/\.tip-images[/\\]\d{4}-\d{2}-\d{2}$/),
+        { recursive: true },
+      );
+    });
+
+    it('monthly mode creates month subdirectory and saves file inside it', async () => {
+      setConfig('organizeFolders', 'monthly');
+      const store = createImageStore();
+
+      const result = await store.save(FAKE_PNG);
+
+      expect(result).toMatch(
+        /\.tip-images[/\\]\d{4}-\d{2}[/\\]img-.*\.png$/,
+      );
+    });
+
+    it('flat mode saves file in root folder (no subdirectory)', async () => {
+      setConfig('organizeFolders', 'flat');
+      const store = createImageStore();
+
+      const result = await store.save(FAKE_PNG);
+
+      // Should NOT have a subdirectory
+      expect(result).toMatch(
+        /\.tip-images[/\\]img-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}\.png$/,
+      );
+    });
+  });
+
+  describe('cleanup() with organizeFolders', () => {
+    it('flat mode uses original flat cleanup logic', async () => {
+      setConfig('maxImages', 1);
+      setConfig('organizeFolders', 'flat');
+
+      const files = [
+        'img-2026-01-01T00-00-00-000.png',
+        'img-2026-01-02T00-00-00-000.png',
+      ];
+      vi.mocked(fs.promises.readdir).mockResolvedValue(
+        files as unknown as fs.Dirent[],
+      );
+
+      const store = createImageStore();
+      await store.cleanup();
+
+      expect(fs.promises.unlink).toHaveBeenCalledTimes(1);
+      expect(fs.promises.unlink).toHaveBeenCalledWith(
+        path.join(IMAGE_FOLDER, 'img-2026-01-01T00-00-00-000.png'),
+      );
+    });
+
+    it('daily mode scans recursively and deletes oldest globally', async () => {
+      setConfig('maxImages', 2);
+      setConfig('organizeFolders', 'daily');
+
+      // Mock readdir to return different results for different paths
+      const rootEntries = [
+        { name: '2026-01-01', isDirectory: () => true, isFile: () => false },
+        { name: '2026-01-02', isDirectory: () => true, isFile: () => false },
+      ];
+      const dir1Entries = [
+        { name: 'img-2026-01-01T00-00-00-000.png', isDirectory: () => false, isFile: () => true },
+        { name: 'img-2026-01-01T12-00-00-000.png', isDirectory: () => false, isFile: () => true },
+      ];
+      const dir2Entries = [
+        { name: 'img-2026-01-02T00-00-00-000.png', isDirectory: () => false, isFile: () => true },
+      ];
+
+      vi.mocked(fs.promises.readdir).mockImplementation(async (p: any, opts?: any) => {
+        const pStr = String(p);
+        if (pStr.endsWith('2026-01-01')) return dir1Entries as any;
+        if (pStr.endsWith('2026-01-02')) return dir2Entries as any;
+        if (opts && typeof opts === 'object' && 'withFileTypes' in opts) return rootEntries as any;
+        // flat readdir (non-withFileTypes) for the root — should not be called in non-flat mode
+        return [] as any;
+      });
+
+      const store = createImageStore();
+      await store.cleanup();
+
+      // 3 images total, maxImages=2, delete 1 oldest
+      expect(fs.promises.unlink).toHaveBeenCalledTimes(1);
+      expect(fs.promises.unlink).toHaveBeenCalledWith(
+        path.join(IMAGE_FOLDER, '2026-01-01', 'img-2026-01-01T00-00-00-000.png'),
+      );
+    });
+
+    it('removes empty subdirectories after cleanup', async () => {
+      setConfig('maxImages', 1);
+      setConfig('organizeFolders', 'daily');
+
+      const rootEntries = [
+        { name: '2026-01-01', isDirectory: () => true, isFile: () => false },
+        { name: '2026-01-02', isDirectory: () => true, isFile: () => false },
+      ];
+      const dir1Entries = [
+        { name: 'img-2026-01-01T00-00-00-000.png', isDirectory: () => false, isFile: () => true },
+      ];
+      const dir2Entries = [
+        { name: 'img-2026-01-02T00-00-00-000.png', isDirectory: () => false, isFile: () => true },
+      ];
+
+      let dir1Deleted = false;
+      vi.mocked(fs.promises.readdir).mockImplementation(async (p: any, opts?: any) => {
+        const pStr = String(p);
+        if (pStr.endsWith('2026-01-01')) {
+          if (dir1Deleted) return [] as any;
+          return (opts && typeof opts === 'object' && 'withFileTypes' in opts) ? dir1Entries as any : ['img-2026-01-01T00-00-00-000.png'] as any;
+        }
+        if (pStr.endsWith('2026-01-02')) return (opts && typeof opts === 'object' && 'withFileTypes' in opts) ? dir2Entries as any : ['img-2026-01-02T00-00-00-000.png'] as any;
+        return rootEntries as any;
+      });
+
+      vi.mocked(fs.promises.unlink).mockImplementation(async () => {
+        dir1Deleted = true;
+      });
+      vi.mocked(fs.promises.rmdir).mockResolvedValue(undefined);
+
+      const store = createImageStore();
+      await store.cleanup();
+
+      // Should delete the oldest file
+      expect(fs.promises.unlink).toHaveBeenCalledTimes(1);
+      // Should try to remove the now-empty dir
+      expect(fs.promises.rmdir).toHaveBeenCalledWith(
+        path.join(IMAGE_FOLDER, '2026-01-01'),
+      );
+    });
+
+    it('does not remove the root image folder even if empty', async () => {
+      setConfig('maxImages', 1);
+      setConfig('organizeFolders', 'daily');
+
+      // Root has one file directly (edge case)
+      const rootEntries = [
+        { name: 'img-stray.png', isDirectory: () => false, isFile: () => true },
+        { name: 'img-newer.png', isDirectory: () => false, isFile: () => true },
+      ];
+
+      vi.mocked(fs.promises.readdir).mockImplementation(async (_p: any, opts?: any) => {
+        if (opts && typeof opts === 'object' && 'withFileTypes' in opts) return rootEntries as any;
+        return [] as any;
+      });
+
+      const store = createImageStore();
+      await store.cleanup();
+
+      // Should delete 1 image (2 - 1 = 1)
+      expect(fs.promises.unlink).toHaveBeenCalledTimes(1);
+      // Should NOT call rmdir on the root folder
+      expect(fs.promises.rmdir).not.toHaveBeenCalled();
     });
   });
 });

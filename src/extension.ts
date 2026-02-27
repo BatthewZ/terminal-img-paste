@@ -6,11 +6,12 @@ import { createImageStore, ImageStore } from './storage/imageStore';
 import { insertPathToTerminal } from './terminal/insertPath';
 import { convertImage, SaveFormat } from './image/convert';
 import { logger } from './util/logger';
+import { notify } from './util/notify';
 import { Mutex } from './util/mutex';
 
 function handleCommandError(commandName: string, err: unknown): void {
   const message = err instanceof Error ? err.message : String(err);
-  vscode.window.showErrorMessage(`Terminal Image Paste: ${message}`);
+  notify.error(`Terminal Image Paste: ${message}`);
   logger.error(`${commandName} command failed`, err);
 }
 
@@ -22,7 +23,7 @@ export function activate(context: vscode.ExtensionContext): void {
   // Check tool availability at activation — warn but don't block
   reader.isToolAvailable().then((available) => {
     if (!available) {
-      vscode.window.showWarningMessage(
+      notify.warning(
         `Terminal Image Paste: clipboard tool "${reader.requiredTool()}" not found. ` +
           `Install it to use clipboard image pasting.`,
       );
@@ -40,7 +41,7 @@ export function activate(context: vscode.ExtensionContext): void {
       try {
         const toolAvailable = await reader.isToolAvailable();
         if (!toolAvailable) {
-          vscode.window.showWarningMessage(
+          notify.warning(
             `Terminal Image Paste: "${reader.requiredTool()}" is not installed. ` +
               `Please install it to paste clipboard images.`,
           );
@@ -66,7 +67,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
         const hasImage = await reader.hasImage();
         if (!hasImage) {
-          vscode.window.showInformationMessage('No image found in clipboard.');
+          notify.info('No image found in clipboard.');
           return;
         }
 
@@ -78,7 +79,7 @@ export function activate(context: vscode.ExtensionContext): void {
         const filePath = await imageStore.save(converted.data, converted.format);
         insertPathToTerminal(filePath);
 
-        vscode.window.setStatusBarMessage('Image pasted to terminal', 3000);
+        notify.statusBar('Image pasted to terminal', 3000);
       } catch (err) {
         handleCommandError('pasteImage', err);
       } finally {
@@ -92,14 +93,12 @@ export function activate(context: vscode.ExtensionContext): void {
     async (uri: vscode.Uri) => {
       try {
         if (!uri?.fsPath) {
-          vscode.window.showErrorMessage(
-            'Terminal Image Paste: No file selected.',
-          );
+          notify.error('Terminal Image Paste: No file selected.');
           return;
         }
 
         insertPathToTerminal(uri.fsPath);
-        vscode.window.setStatusBarMessage('Path sent to terminal', 3000);
+        notify.statusBar('Path sent to terminal', 3000);
       } catch (err) {
         handleCommandError('sendPathToTerminal', err);
       }

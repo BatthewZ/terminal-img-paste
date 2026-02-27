@@ -230,3 +230,130 @@ describe('imageStore integration (real fs)', () => {
     expect(fs.existsSync(p2)).toBe(true);
   });
 });
+
+describe('imageStore integration — organizeFolders (real fs)', () => {
+  it('daily mode creates YYYY-MM-DD subdirectory and file inside it', async () => {
+    setConfig('organizeFolders', 'daily');
+    const store = createImageStore();
+
+    const filePath = await store.save(fakePng('daily-img'));
+
+    expect(path.isAbsolute(filePath)).toBe(true);
+    expect(fs.existsSync(filePath)).toBe(true);
+
+    // File should be inside a date subdirectory
+    const relPath = path.relative(tmpDir, filePath);
+    expect(relPath).toMatch(/^\.tip-images[/\\]\d{4}-\d{2}-\d{2}[/\\]img-.*\.png$/);
+  });
+
+  it('monthly mode creates YYYY-MM subdirectory and file inside it', async () => {
+    setConfig('organizeFolders', 'monthly');
+    const store = createImageStore();
+
+    const filePath = await store.save(fakePng('monthly-img'));
+
+    expect(fs.existsSync(filePath)).toBe(true);
+    const relPath = path.relative(tmpDir, filePath);
+    expect(relPath).toMatch(/^\.tip-images[/\\]\d{4}-\d{2}[/\\]img-.*\.png$/);
+  });
+
+  it('flat mode does not create subdirectories', async () => {
+    setConfig('organizeFolders', 'flat');
+    const store = createImageStore();
+
+    const filePath = await store.save(fakePng('flat-img'));
+
+    const relPath = path.relative(tmpDir, filePath);
+    expect(relPath).toMatch(/^\.tip-images[/\\]img-.*\.png$/);
+    // No subdirectory — the parent should be .tip-images directly
+    expect(path.dirname(relPath)).toBe('.tip-images');
+  });
+
+  it('cleanup scans across subdirectories and deletes oldest globally', async () => {
+    setConfig('maxImages', 2);
+    setConfig('organizeFolders', 'daily');
+
+    const imageDir = path.join(tmpDir, '.tip-images');
+
+    // Create subdirectories with images
+    const dir1 = path.join(imageDir, '2026-01-01');
+    const dir2 = path.join(imageDir, '2026-01-02');
+    fs.mkdirSync(dir1, { recursive: true });
+    fs.mkdirSync(dir2, { recursive: true });
+
+    fs.writeFileSync(path.join(dir1, 'img-2026-01-01T00-00-00-000.png'), 'old1');
+    fs.writeFileSync(path.join(dir1, 'img-2026-01-01T12-00-00-000.png'), 'old2');
+    fs.writeFileSync(path.join(dir2, 'img-2026-01-02T00-00-00-000.png'), 'newer');
+
+    // Save one more → triggers cleanup. 4 total, maxImages=2 → delete 2 oldest
+    const store = createImageStore();
+    await store.save(fakePng('newest'));
+
+    // The two oldest images from dir1 should be gone
+    expect(fs.existsSync(path.join(dir1, 'img-2026-01-01T00-00-00-000.png'))).toBe(false);
+    expect(fs.existsSync(path.join(dir1, 'img-2026-01-01T12-00-00-000.png'))).toBe(false);
+    // The newer ones should remain
+    expect(fs.existsSync(path.join(dir2, 'img-2026-01-02T00-00-00-000.png'))).toBe(true);
+  });
+
+  it('cleanup removes empty subdirectories after deletion', async () => {
+    setConfig('maxImages', 1);
+    setConfig('organizeFolders', 'daily');
+
+    const imageDir = path.join(tmpDir, '.tip-images');
+    const dir1 = path.join(imageDir, '2026-01-01');
+    const dir2 = path.join(imageDir, '2026-01-02');
+    fs.mkdirSync(dir1, { recursive: true });
+    fs.mkdirSync(dir2, { recursive: true });
+
+    fs.writeFileSync(path.join(dir1, 'img-2026-01-01T00-00-00-000.png'), 'old');
+    fs.writeFileSync(path.join(dir2, 'img-2026-01-02T00-00-00-000.png'), 'newer');
+
+    const store = createImageStore();
+    // Save triggers cleanup: 3 images, maxImages=1, delete 2 oldest
+    await store.save(fakePng('newest'));
+
+    // dir1 should have been removed (all its images were deleted)
+    expect(fs.existsSync(dir1)).toBe(false);
+    // Root image folder should still exist
+    expect(fs.existsSync(imageDir)).toBe(true);
+  });
+
+  it('cleanup preserves non-empty subdirectories', async () => {
+    setConfig('maxImages', 2);
+    setConfig('organizeFolders', 'daily');
+
+    const imageDir = path.join(tmpDir, '.tip-images');
+    const dir1 = path.join(imageDir, '2026-01-01');
+    const dir2 = path.join(imageDir, '2026-01-02');
+    fs.mkdirSync(dir1, { recursive: true });
+    fs.mkdirSync(dir2, { recursive: true });
+
+    fs.writeFileSync(path.join(dir1, 'img-2026-01-01T00-00-00-000.png'), 'old');
+    fs.writeFileSync(path.join(dir2, 'img-2026-01-02T00-00-00-000.png'), 'keep');
+    fs.writeFileSync(path.join(dir2, 'img-2026-01-02T12-00-00-000.png'), 'keep2');
+
+    const store = createImageStore();
+    // Save triggers cleanup: 4 images, maxImages=2, delete 2 oldest
+    await store.save(fakePng('newest'));
+
+    // dir1 emptied → removed
+    expect(fs.existsSync(dir1)).toBe(false);
+    // dir2 still has images → preserved
+    expect(fs.existsSync(dir2)).toBe(true);
+  });
+
+  it('sequential {n} pattern works within subdirectories', async () => {
+    setConfig('filenamePattern', 'shot-{n}');
+    setConfig('organizeFolders', 'daily');
+    const store = createImageStore();
+
+    const p1 = await store.save(fakePng('first'));
+    const p2 = await store.save(fakePng('second'));
+
+    expect(p1).toMatch(/shot-1\.png$/);
+    expect(p2).toMatch(/shot-2\.png$/);
+    // Both should be in the same date subdirectory
+    expect(path.dirname(p1)).toBe(path.dirname(p2));
+  });
+});
