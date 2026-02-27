@@ -91,5 +91,5 @@ tasks:
 
 pipelines:
   development:
-    iterations: 2
+    iterations: 1
     tasks: [refactor, checker, tester]

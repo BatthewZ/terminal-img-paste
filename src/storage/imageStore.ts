@@ -16,6 +16,15 @@ export interface ImageStore {
 
 const DEFAULT_FOLDER_NAME = '.tip-images';
 
+/** First 8 bytes of every valid PNG file. */
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
+function validatePng(buffer: Buffer): void {
+  if (buffer.length < PNG_SIGNATURE.length || !buffer.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)) {
+    throw new Error('Clipboard data is not a valid PNG image');
+  }
+}
+
 function getConfig(): vscode.WorkspaceConfiguration {
   return vscode.workspace.getConfiguration('terminalImgPaste');
 }
@@ -39,9 +48,9 @@ function getImageFolderPath(): string {
   const root = getWorkspaceRoot();
   const folderName = getFolderName();
   const resolved = path.resolve(root, folderName);
-  if (resolved !== root && !resolved.startsWith(root + path.sep)) {
+  if (!resolved.startsWith(root + path.sep)) {
     throw new Error(
-      `Configured folderName "${folderName}" resolves outside the workspace root`,
+      `Configured folderName "${folderName}" must resolve to a subdirectory of the workspace root`,
     );
   }
   return resolved;
@@ -62,12 +71,14 @@ function generateFileName(): string {
 export function createImageStore(): ImageStore {
   return {
     async save(imageBuffer: Buffer): Promise<string> {
+      validatePng(imageBuffer);
+
       const folder = getImageFolderPath();
       await fs.promises.mkdir(folder, { recursive: true });
 
       const fileName = generateFileName();
       const filePath = path.join(folder, fileName);
-      await fs.promises.writeFile(filePath, imageBuffer);
+      await fs.promises.writeFile(filePath, imageBuffer, { mode: 0o600 });
 
       logger.info(`Saved image: ${filePath}`);
 

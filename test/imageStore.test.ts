@@ -16,6 +16,12 @@ const DEFAULT_FOLDER = '.tip-images';
 const IMAGE_FOLDER = path.join(WORKSPACE_ROOT, DEFAULT_FOLDER);
 const GITIGNORE_PATH = path.join(WORKSPACE_ROOT, '.gitignore');
 
+/** A minimal buffer that passes PNG magic-byte validation. */
+const FAKE_PNG = Buffer.concat([
+  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+  Buffer.from('fake-png-body'),
+]);
+
 // Test-local configuration store used by the getConfiguration mock.
 let configValues: Record<string, unknown>;
 
@@ -66,7 +72,7 @@ describe('createImageStore', () => {
   describe('save()', () => {
     it('creates the image directory recursively', async () => {
       const store = createImageStore();
-      const buf = Buffer.from('fake-png-data');
+      const buf = FAKE_PNG;
 
       await store.save(buf);
 
@@ -77,7 +83,7 @@ describe('createImageStore', () => {
 
     it('writes the image buffer to a timestamped .png file', async () => {
       const store = createImageStore();
-      const buf = Buffer.from('fake-png-data');
+      const buf = FAKE_PNG;
 
       await store.save(buf);
 
@@ -86,12 +92,13 @@ describe('createImageStore', () => {
           /\.tip-images[/\\]img-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}\.png$/,
         ),
         buf,
+        { mode: 0o600 },
       );
     });
 
     it('returns the absolute file path', async () => {
       const store = createImageStore();
-      const buf = Buffer.from('fake-png-data');
+      const buf = FAKE_PNG;
 
       const result = await store.save(buf);
 
@@ -102,7 +109,7 @@ describe('createImageStore', () => {
 
     it('logs the saved image path', async () => {
       const store = createImageStore();
-      const buf = Buffer.from('fake-png-data');
+      const buf = FAKE_PNG;
 
       await store.save(buf);
 
@@ -114,7 +121,7 @@ describe('createImageStore', () => {
     it('calls cleanup after saving', async () => {
       const store = createImageStore();
       const cleanupSpy = vi.spyOn(store, 'cleanup');
-      const buf = Buffer.from('fake-png-data');
+      const buf = FAKE_PNG;
 
       await store.save(buf);
 
@@ -124,7 +131,7 @@ describe('createImageStore', () => {
     it('calls ensureGitIgnored after saving', async () => {
       const store = createImageStore();
       const gitIgnoreSpy = vi.spyOn(store, 'ensureGitIgnored');
-      const buf = Buffer.from('fake-png-data');
+      const buf = FAKE_PNG;
 
       await store.save(buf);
 
@@ -328,13 +335,41 @@ describe('createImageStore', () => {
     });
   });
 
+  describe('PNG validation', () => {
+    it('rejects a buffer that is not a valid PNG', async () => {
+      const store = createImageStore();
+      await expect(store.save(Buffer.from('not-a-png'))).rejects.toThrow(
+        'Clipboard data is not a valid PNG image',
+      );
+    });
+
+    it('rejects an empty buffer', async () => {
+      const store = createImageStore();
+      await expect(store.save(Buffer.alloc(0))).rejects.toThrow(
+        'Clipboard data is not a valid PNG image',
+      );
+    });
+
+    it('rejects a buffer shorter than the PNG signature', async () => {
+      const store = createImageStore();
+      await expect(store.save(Buffer.from([0x89, 0x50]))).rejects.toThrow(
+        'Clipboard data is not a valid PNG image',
+      );
+    });
+
+    it('accepts a buffer with a valid PNG signature', async () => {
+      const store = createImageStore();
+      await expect(store.save(FAKE_PNG)).resolves.toBeDefined();
+    });
+  });
+
   describe('folderName path traversal validation', () => {
     it('rejects folderName with ".." path traversal', async () => {
       setConfig('folderName', '../../../etc');
 
       const store = createImageStore();
-      await expect(store.save(Buffer.from('data'))).rejects.toThrow(
-        /resolves outside the workspace root/,
+      await expect(store.save(FAKE_PNG)).rejects.toThrow(
+        /must resolve to a subdirectory of the workspace root/,
       );
     });
 
@@ -342,8 +377,8 @@ describe('createImageStore', () => {
       setConfig('folderName', '/tmp/evil');
 
       const store = createImageStore();
-      await expect(store.save(Buffer.from('data'))).rejects.toThrow(
-        /resolves outside the workspace root/,
+      await expect(store.save(FAKE_PNG)).rejects.toThrow(
+        /must resolve to a subdirectory of the workspace root/,
       );
     });
 
@@ -351,8 +386,26 @@ describe('createImageStore', () => {
       setConfig('folderName', '.tip-images/../../outside');
 
       const store = createImageStore();
-      await expect(store.save(Buffer.from('data'))).rejects.toThrow(
-        /resolves outside the workspace root/,
+      await expect(store.save(FAKE_PNG)).rejects.toThrow(
+        /must resolve to a subdirectory of the workspace root/,
+      );
+    });
+
+    it('rejects folderName "." that resolves to workspace root', async () => {
+      setConfig('folderName', '.');
+
+      const store = createImageStore();
+      await expect(store.save(FAKE_PNG)).rejects.toThrow(
+        /must resolve to a subdirectory of the workspace root/,
+      );
+    });
+
+    it('rejects empty folderName that resolves to workspace root', async () => {
+      setConfig('folderName', '');
+
+      const store = createImageStore();
+      await expect(store.save(FAKE_PNG)).rejects.toThrow(
+        /must resolve to a subdirectory of the workspace root/,
       );
     });
 
@@ -360,19 +413,19 @@ describe('createImageStore', () => {
       setConfig('folderName', 'images');
 
       const store = createImageStore();
-      await expect(store.save(Buffer.from('data'))).resolves.toBeDefined();
+      await expect(store.save(FAKE_PNG)).resolves.toBeDefined();
     });
 
     it('allows valid nested subdirectory folderName', async () => {
       setConfig('folderName', 'assets/images/paste');
 
       const store = createImageStore();
-      await expect(store.save(Buffer.from('data'))).resolves.toBeDefined();
+      await expect(store.save(FAKE_PNG)).resolves.toBeDefined();
     });
 
     it('allows default folderName (.tip-images)', async () => {
       const store = createImageStore();
-      await expect(store.save(Buffer.from('data'))).resolves.toBeDefined();
+      await expect(store.save(FAKE_PNG)).resolves.toBeDefined();
     });
   });
 
@@ -381,7 +434,7 @@ describe('createImageStore', () => {
       (workspace as any).workspaceFolders = undefined;
 
       const store = createImageStore();
-      await expect(store.save(Buffer.from('data'))).rejects.toThrow(
+      await expect(store.save(FAKE_PNG)).rejects.toThrow(
         'No workspace folder is open',
       );
     });
@@ -390,7 +443,7 @@ describe('createImageStore', () => {
       (workspace as any).workspaceFolders = [];
 
       const store = createImageStore();
-      await expect(store.save(Buffer.from('data'))).rejects.toThrow(
+      await expect(store.save(FAKE_PNG)).rejects.toThrow(
         'No workspace folder is open',
       );
     });
@@ -399,7 +452,7 @@ describe('createImageStore', () => {
       vi.mocked(fs.promises.mkdir).mockRejectedValue(new Error('EACCES: permission denied'));
 
       const store = createImageStore();
-      await expect(store.save(Buffer.from('data'))).rejects.toThrow(
+      await expect(store.save(FAKE_PNG)).rejects.toThrow(
         'EACCES: permission denied',
       );
     });
@@ -408,7 +461,7 @@ describe('createImageStore', () => {
       vi.mocked(fs.promises.writeFile).mockRejectedValue(new Error('ENOSPC: no space left'));
 
       const store = createImageStore();
-      await expect(store.save(Buffer.from('data'))).rejects.toThrow(
+      await expect(store.save(FAKE_PNG)).rejects.toThrow(
         'ENOSPC: no space left',
       );
     });

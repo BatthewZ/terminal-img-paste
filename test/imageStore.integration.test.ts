@@ -56,10 +56,16 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 // Integration tests — real filesystem
 // ---------------------------------------------------------------------------
+/** A minimal buffer that passes PNG magic-byte validation. */
+const PNG_HEADER = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+function fakePng(body: string): Buffer {
+  return Buffer.concat([PNG_HEADER, Buffer.from(body)]);
+}
+
 describe('imageStore integration (real fs)', () => {
   it('save creates the image directory if it does not exist', async () => {
     const store = createImageStore();
-    await store.save(Buffer.from('fake-png'));
+    await store.save(fakePng('fake-png'));
 
     const imageDir = path.join(tmpDir, '.tip-images');
     expect(fs.existsSync(imageDir)).toBe(true);
@@ -67,7 +73,7 @@ describe('imageStore integration (real fs)', () => {
 
   it('save writes a real file with correct contents', async () => {
     const store = createImageStore();
-    const data = Buffer.from('PNG-DATA-12345');
+    const data = fakePng('PNG-DATA-12345');
     const filePath = await store.save(data);
 
     const contents = fs.readFileSync(filePath);
@@ -76,7 +82,7 @@ describe('imageStore integration (real fs)', () => {
 
   it('save returns an absolute path that exists on disk', async () => {
     const store = createImageStore();
-    const filePath = await store.save(Buffer.from('img'));
+    const filePath = await store.save(fakePng('img'));
 
     expect(path.isAbsolute(filePath)).toBe(true);
     expect(fs.existsSync(filePath)).toBe(true);
@@ -94,7 +100,7 @@ describe('imageStore integration (real fs)', () => {
     fs.writeFileSync(path.join(imageDir, 'img-2026-01-03T00-00-00-000.png'), 'new1');
 
     // Save one more → triggers cleanup, now 4 png files total, maxImages=2
-    await store.save(Buffer.from('newest'));
+    await store.save(fakePng('newest'));
 
     const remaining = fs.readdirSync(imageDir).filter((f) => f.endsWith('.png'));
     expect(remaining).toHaveLength(2);
@@ -113,7 +119,7 @@ describe('imageStore integration (real fs)', () => {
     fs.writeFileSync(path.join(imageDir, 'readme.txt'), 'keep me');
     fs.writeFileSync(path.join(imageDir, 'img-2026-01-01T00-00-00-000.png'), 'old');
 
-    await store.save(Buffer.from('new'));
+    await store.save(fakePng('new'));
 
     // readme.txt should still exist
     expect(fs.existsSync(path.join(imageDir, 'readme.txt'))).toBe(true);
@@ -121,7 +127,7 @@ describe('imageStore integration (real fs)', () => {
 
   it('ensureGitIgnored creates .gitignore with folder name', async () => {
     const store = createImageStore();
-    await store.save(Buffer.from('img'));
+    await store.save(fakePng('img'));
 
     const gitignorePath = path.join(tmpDir, '.gitignore');
     expect(fs.existsSync(gitignorePath)).toBe(true);
@@ -135,7 +141,7 @@ describe('imageStore integration (real fs)', () => {
     fs.writeFileSync(gitignorePath, 'node_modules\n', 'utf-8');
 
     const store = createImageStore();
-    await store.save(Buffer.from('img'));
+    await store.save(fakePng('img'));
 
     const content = fs.readFileSync(gitignorePath, 'utf-8');
     expect(content).toContain('node_modules');
@@ -144,12 +150,12 @@ describe('imageStore integration (real fs)', () => {
 
   it('consecutive saves generate distinct filenames', async () => {
     const store = createImageStore();
-    const path1 = await store.save(Buffer.from('img1'));
+    const path1 = await store.save(fakePng('img1'));
 
     // Small delay to ensure different timestamp
     await new Promise((r) => setTimeout(r, 5));
 
-    const path2 = await store.save(Buffer.from('img2'));
+    const path2 = await store.save(fakePng('img2'));
 
     expect(path1).not.toBe(path2);
     expect(fs.existsSync(path1)).toBe(true);
