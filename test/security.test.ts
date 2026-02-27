@@ -4,10 +4,6 @@ import * as os from 'os';
 import * as path from 'path';
 import { workspace } from 'vscode';
 
-vi.mock('../src/util/logger', () => ({
-  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
-}));
-
 import { createImageStore } from '../src/storage/imageStore';
 import { writeSecureFile } from '../src/util/fs';
 

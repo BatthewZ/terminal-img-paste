@@ -152,18 +152,13 @@ describe("FallbackClipboardReader", () => {
           },
         }),
       ]);
-      await expect(fb.detectFormat()).rejects.toThrow(
-        "All clipboard readers failed to detect format",
-      );
-      try {
-        await fb.detectFormat();
-      } catch (err) {
-        expect(err).toBeInstanceOf(AggregateError);
-        const agg = err as AggregateError;
-        expect(agg.errors).toHaveLength(2);
-        expect(agg.errors[0].message).toBe("reader1 failed");
-        expect(agg.errors[1].message).toBe("reader2 failed");
-      }
+      const err = await fb.detectFormat().catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(AggregateError);
+      const agg = err as AggregateError;
+      expect(agg.message).toContain("All clipboard readers failed to detect format");
+      expect(agg.errors).toHaveLength(2);
+      expect(agg.errors[0].message).toBe("reader1 failed");
+      expect(agg.errors[1].message).toBe("reader2 failed");
     });
   });
 
@@ -247,18 +242,13 @@ describe("FallbackClipboardReader", () => {
           },
         }),
       ]);
-      await expect(fb.readImage()).rejects.toThrow(
-        "All clipboard readers failed",
-      );
-      try {
-        await fb.readImage();
-      } catch (err) {
-        expect(err).toBeInstanceOf(AggregateError);
-        const agg = err as AggregateError;
-        expect(agg.errors).toHaveLength(2);
-        expect(agg.errors[0].message).toBe("tool-a not found");
-        expect(agg.errors[1].message).toBe("tool-b crashed");
-      }
+      const err = await fb.readImage().catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(AggregateError);
+      const agg = err as AggregateError;
+      expect(agg.message).toContain("All clipboard readers failed");
+      expect(agg.errors).toHaveLength(2);
+      expect(agg.errors[0].message).toBe("tool-a not found");
+      expect(agg.errors[1].message).toBe("tool-b crashed");
     });
 
     it("handles non-Error throws gracefully", async () => {

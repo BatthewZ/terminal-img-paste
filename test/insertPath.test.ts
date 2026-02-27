@@ -1,17 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { window, workspace } from 'vscode';
 
-vi.mock('../src/util/logger', () => ({
-  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), show: vi.fn() },
-}));
-
-vi.mock('../src/terminal/shellDetect', () => ({
-  detectShellType: vi.fn(() => 'bash'),
-}));
-
 import { insertPathToTerminal, quotePath } from '../src/terminal/insertPath';
 import { logger } from '../src/util/logger';
-import { detectShellType } from '../src/terminal/shellDetect';
 
 // ---------------------------------------------------------------------------
 // Test-local config store (mirrors the pattern in imageStore.test.ts)
@@ -29,7 +20,7 @@ function setConfig(key: string, value: unknown): void {
 /** Re-establish the vscode mocks after vitest's mockReset clears them. */
 function setupVscodeMock(hasTerminal = true): void {
   if (hasTerminal) {
-    (window as any).activeTerminal = { sendText: vi.fn(), creationOptions: {} };
+    (window as any).activeTerminal = { sendText: vi.fn(), creationOptions: { shellPath: '/bin/bash' } };
   } else {
     (window as any).activeTerminal = undefined;
   }
@@ -48,8 +39,6 @@ beforeEach(() => {
   vi.restoreAllMocks();
   resetConfig();
   setupVscodeMock();
-  // Default to bash for existing tests
-  vi.mocked(detectShellType).mockReturnValue('bash');
 });
 
 // ---------------------------------------------------------------------------
@@ -252,7 +241,7 @@ describe('insertPathToTerminal', () => {
   // -- Shell-aware integration tests ----------------------------------------
 
   it('uses fish quoting when shell is fish', () => {
-    vi.mocked(detectShellType).mockReturnValue('fish');
+    (window as any).activeTerminal = { sendText: vi.fn(), creationOptions: { shellPath: '/usr/bin/fish' } };
     insertPathToTerminal("/home/it's here/img.png");
     expect(window.activeTerminal!.sendText).toHaveBeenCalledWith(
       "'/home/it\\'s here/img.png'",
@@ -261,7 +250,7 @@ describe('insertPathToTerminal', () => {
   });
 
   it('uses powershell quoting when shell is powershell', () => {
-    vi.mocked(detectShellType).mockReturnValue('powershell');
+    (window as any).activeTerminal = { sendText: vi.fn(), creationOptions: { shellPath: '/usr/bin/pwsh' } };
     insertPathToTerminal('/home/$var/img.png');
     expect(window.activeTerminal!.sendText).toHaveBeenCalledWith(
       '"/home/`$var/img.png"',
@@ -270,7 +259,7 @@ describe('insertPathToTerminal', () => {
   });
 
   it('uses cmd quoting when shell is cmd', () => {
-    vi.mocked(detectShellType).mockReturnValue('cmd');
+    (window as any).activeTerminal = { sendText: vi.fn(), creationOptions: { shellPath: 'C:\\Windows\\System32\\cmd.exe' } };
     insertPathToTerminal('/home/%VAR%/img.png');
     expect(window.activeTerminal!.sendText).toHaveBeenCalledWith(
       '"/home/%%VAR%%/img.png"',
@@ -278,8 +267,12 @@ describe('insertPathToTerminal', () => {
     );
   });
 
-  it('calls detectShellType with the active terminal', () => {
+  it('detects shell type from terminal creationOptions', () => {
+    (window as any).activeTerminal = { sendText: vi.fn(), creationOptions: { shellPath: '/usr/bin/zsh' } };
     insertPathToTerminal('/tmp/img.png');
-    expect(detectShellType).toHaveBeenCalledWith(window.activeTerminal);
+    expect(window.activeTerminal!.sendText).toHaveBeenCalledWith(
+      "'/tmp/img.png'",
+      false,
+    );
   });
 });

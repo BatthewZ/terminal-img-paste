@@ -6,10 +6,6 @@ vi.mock('../src/util/exec', () => ({
   execBuffer: vi.fn(),
 }));
 
-vi.mock('../src/util/logger', () => ({
-  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), show: vi.fn() },
-}));
-
 vi.mock('fs', () => ({
   promises: {
     writeFile: vi.fn().mockResolvedValue(undefined),

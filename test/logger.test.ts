@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { window } from 'vscode';
+
+vi.unmock('../src/util/logger');
+
 import { createLogger } from '../src/util/logger';
 
 let mockChannel: {

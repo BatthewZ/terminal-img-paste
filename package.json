@@ -21,7 +21,7 @@
   "engines": {
     "vscode": "^1.85.0"
   },
-  "icon": "assets/icon.svg",
+  "icon": "assets/icon.png",
   "galleryBanner": {
     "color": "#1e1e1e",
     "theme": "dark"
@@ -39,7 +39,7 @@
         {
           "id": "terminalImgPaste",
           "title": "Terminal Image Paste",
-          "icon": "assets/icon.svg"
+          "icon": "assets/icon.png"
         }
       ]
     },

@@ -1,10 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { window, __getLastCreatedPanel, __clearLastPanel, ViewColumn } from 'vscode';
 
-vi.mock('../src/util/logger', () => ({
-  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), show: vi.fn() },
-}));
-
 import { showImagePreview } from '../src/views/previewPanel';
 
 beforeEach(() => {

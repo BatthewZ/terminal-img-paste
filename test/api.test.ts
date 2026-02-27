@@ -12,10 +12,6 @@ vi.mock('../src/image/convert', () => ({
   convertImage: vi.fn(async (data: Buffer, format: string) => ({ data, format })),
 }));
 
-vi.mock('../src/util/logger', () => ({
-  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), show: vi.fn() },
-}));
-
 // Import after mocks
 import { createApi, type PasteResult, type TerminalImgPasteApi } from '../src/api';
 import { insertPathToTerminal } from '../src/terminal/insertPath';

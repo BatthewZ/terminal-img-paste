@@ -7,10 +7,6 @@ import {
   CancellationTokenSource,
 } from 'vscode';
 
-vi.mock('../src/util/logger', () => ({
-  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), show: vi.fn() },
-}));
-
 vi.mock('../src/util/notify', () => ({
   notify: {
     statusBar: vi.fn(),

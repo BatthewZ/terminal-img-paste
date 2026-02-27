@@ -5,9 +5,6 @@ import * as path from 'path';
 import { workspace } from 'vscode';
 
 vi.mock('fs');
-vi.mock('../src/util/logger', () => ({
-  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
-}));
 
 import { createImageStore, resolveFilenamePattern, getSubdirectory } from '../src/storage/imageStore';
 import { logger } from '../src/util/logger';

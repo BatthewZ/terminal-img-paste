@@ -1,14 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { workspace, window, env } from 'vscode';
 
-vi.mock('../src/util/logger', () => ({
-  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
-}));
-
-vi.mock('../src/terminal/shellDetect', () => ({
-  detectShellType: vi.fn(() => 'bash'),
-}));
-
 vi.mock('../src/platform/remote', () => ({
   detectRemoteContext: vi.fn(() => ({ remote: false })),
 }));
@@ -21,7 +13,6 @@ import {
 import type { PlatformInfo } from '../src/platform/detect';
 import type { ClipboardReader, ClipboardFormat, ClipboardImageResult } from '../src/clipboard/types';
 import { FallbackClipboardReader } from '../src/clipboard/fallback';
-import { detectShellType } from '../src/terminal/shellDetect';
 import { detectRemoteContext } from '../src/platform/remote';
 
 // ---------------------------------------------------------------------------
@@ -81,14 +72,13 @@ function setupVscodeMock(): void {
         }),
       }) as any,
   );
-  (window as any).activeTerminal = { sendText: vi.fn(), creationOptions: {} };
+  (window as any).activeTerminal = { sendText: vi.fn(), creationOptions: { shellPath: '/bin/bash' } };
 }
 
 beforeEach(() => {
   vi.restoreAllMocks();
   resetConfig();
   setupVscodeMock();
-  vi.mocked(detectShellType).mockReturnValue('bash');
   vi.mocked(detectRemoteContext).mockReturnValue({ remote: false });
 });
 
@@ -177,7 +167,7 @@ describe('gatherDiagnostics', () => {
   });
 
   it('reports terminal shell type', async () => {
-    vi.mocked(detectShellType).mockReturnValue('fish');
+    (window as any).activeTerminal = { sendText: vi.fn(), creationOptions: { shellPath: '/usr/bin/fish' } };
 
     const report = await gatherDiagnostics(makePlatform(), makeReader());
 

@@ -12,6 +12,7 @@ export default defineConfig({
     environment: 'node',
     include: ['test/**/*.test.ts'],
     exclude: ['test/integration/**'],
+    setupFiles: ['test/setup.ts'],
     mockReset: true,
     coverage: {
       provider: 'v8',

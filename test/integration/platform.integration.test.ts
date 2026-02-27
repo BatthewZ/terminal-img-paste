@@ -71,25 +71,24 @@ describe('detectPlatform integration (real system)', () => {
     });
   });
 
-  it('display server detection is consistent with environment', () => {
-    // Only meaningful on Linux (non-WSL)
-    if (platform.os !== 'linux' || platform.isWSL) {
-      // On non-Linux or WSL the result depends on env vars; just verify it is a valid value
-      expect(['x11', 'wayland', 'unknown']).toContain(platform.displayServer);
-      return;
-    }
-
-    const sessionType = process.env.XDG_SESSION_TYPE;
-    const waylandDisplay = process.env.WAYLAND_DISPLAY;
-
-    if (sessionType === 'wayland') {
-      expect(platform.displayServer).toBe('wayland');
-    } else if (sessionType === 'x11') {
-      expect(platform.displayServer).toBe('x11');
-    } else if (waylandDisplay) {
-      expect(platform.displayServer).toBe('wayland');
-    } else {
-      expect(platform.displayServer).toBe('unknown');
-    }
+  it('display server detection returns a valid value', () => {
+    expect(['x11', 'wayland', 'unknown']).toContain(platform.displayServer);
   });
+
+  describe.skipIf(platform.os !== 'linux' || platform.isWSL)(
+    'display server detection on native Linux',
+    () => {
+      const sessionType = process.env.XDG_SESSION_TYPE;
+      const waylandDisplay = process.env.WAYLAND_DISPLAY;
+      const expected =
+        sessionType === 'wayland' ? 'wayland'
+          : sessionType === 'x11' ? 'x11'
+            : waylandDisplay ? 'wayland'
+              : 'unknown';
+
+      it(`matches environment (expecting "${expected}")`, () => {
+        expect(platform.displayServer).toBe(expected);
+      });
+    },
+  );
 });
