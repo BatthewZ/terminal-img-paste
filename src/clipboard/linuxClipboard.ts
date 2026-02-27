@@ -1,6 +1,7 @@
 import { ClipboardReader, ClipboardFormat, ClipboardImageResult } from "./types";
 import { PlatformInfo } from "../platform/detect";
 import { exec, execBuffer } from "../util/exec";
+import { resolveToolPathOrFallback } from "../util/toolPath";
 
 /** MIME type to ClipboardFormat mapping, in preference order. */
 const MIME_FORMAT_MAP: Array<[string, ClipboardFormat]> = [
@@ -45,6 +46,7 @@ function detectMimeAndFormat(
 
 export class LinuxClipboardReader implements ClipboardReader {
   private displayServer: PlatformInfo["displayServer"];
+  private resolvedToolPath: string | undefined;
 
   constructor(displayServer: PlatformInfo["displayServer"]) {
     this.displayServer = displayServer;
@@ -52,6 +54,17 @@ export class LinuxClipboardReader implements ClipboardReader {
 
   private isWayland(): boolean {
     return this.displayServer === "wayland";
+  }
+
+  private toolName(): string {
+    return this.isWayland() ? "wl-paste" : "xclip";
+  }
+
+  private async getToolPath(): Promise<string> {
+    if (this.resolvedToolPath === undefined) {
+      this.resolvedToolPath = await resolveToolPathOrFallback(this.toolName());
+    }
+    return this.resolvedToolPath;
   }
 
   requiredTool(): string {
@@ -76,11 +89,12 @@ export class LinuxClipboardReader implements ClipboardReader {
 
   /** Get the list of available clipboard types/targets. */
   private async getClipboardTypes(): Promise<string> {
+    const tool = await this.getToolPath();
     if (this.isWayland()) {
-      const { stdout } = await exec("wl-paste", ["--list-types"]);
+      const { stdout } = await exec(tool, ["--list-types"]);
       return stdout;
     } else {
-      const { stdout } = await exec("xclip", [
+      const { stdout } = await exec(tool, [
         "-selection",
         "clipboard",
         "-t",
@@ -118,9 +132,10 @@ export class LinuxClipboardReader implements ClipboardReader {
     const { mime, format } = detected;
     const resolvedFormat = format === "unknown" ? "png" : format;
 
+    const tool = await this.getToolPath();
     const { stdout } = this.isWayland()
-      ? await execBuffer("wl-paste", ["--type", mime])
-      : await execBuffer("xclip", [
+      ? await execBuffer(tool, ["--type", mime])
+      : await execBuffer(tool, [
           "-selection",
           "clipboard",
           "-t",

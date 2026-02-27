@@ -1,12 +1,14 @@
 import * as fs from "fs";
 import { ClipboardReader, ClipboardFormat, ClipboardImageResult } from "./types";
 import { exec } from "../util/exec";
+import { encodePowerShellCommand } from "../util/powershell";
 import { logger } from "../util/logger";
 
 const PS_HAS_IMAGE =
   "Add-Type -AssemblyName System.Windows.Forms; if ([System.Windows.Forms.Clipboard]::ContainsImage()) { echo 'yes' } else { echo 'no' }";
 
-const PS_READ_IMAGE =
+/** PowerShell script that saves the clipboard image to a temp file and outputs its path. */
+export const PS_READ_IMAGE =
   "Add-Type -AssemblyName System.Windows.Forms; $img = [System.Windows.Forms.Clipboard]::GetImage(); if ($img -eq $null) { exit 1 }; $tmp = [System.IO.Path]::GetTempFileName(); $img.Save($tmp, [System.Drawing.Imaging.ImageFormat]::Png); Write-Output $tmp";
 
 /**
@@ -34,8 +36,8 @@ export abstract class PowerShellClipboardReader implements ClipboardReader {
   async hasImage(): Promise<boolean> {
     try {
       const result = await exec(this.powershellExe, [
-        "-Command",
-        PS_HAS_IMAGE,
+        "-EncodedCommand",
+        encodePowerShellCommand(PS_HAS_IMAGE),
       ]);
       return result.stdout.trim() === "yes";
     } catch {
@@ -59,8 +61,8 @@ export abstract class PowerShellClipboardReader implements ClipboardReader {
     }
 
     const result = await exec(this.powershellExe, [
-      "-Command",
-      PS_READ_IMAGE,
+      "-EncodedCommand",
+      encodePowerShellCommand(PS_READ_IMAGE),
     ]);
 
     const localPath = await this.resolveTempPath(result.stdout.trim());

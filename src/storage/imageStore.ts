@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { logger } from '../util/logger';
+import { writeSecureFile } from '../util/fs';
 import type { ClipboardFormat } from '../clipboard/types';
 
 export interface ImageStore {
@@ -129,17 +130,46 @@ function generateFileName(format: ClipboardFormat): string {
   return `img-${y}-${mo}-${d}T${h}-${mi}-${s}-${ms}${ext}`;
 }
 
+/**
+ * Verify that `target` is inside `root` after resolving symlinks.
+ * On case-insensitive filesystems (Windows/macOS) paths are lowercased before
+ * comparison; on Linux (case-sensitive) exact casing is preserved.
+ * Throws if the resolved path escapes the workspace.
+ */
+async function assertInsideWorkspace(target: string, root: string): Promise<string> {
+  const realTarget = await fs.promises.realpath(target);
+  const realRoot = await fs.promises.realpath(root);
+  // Only normalise case on case-insensitive filesystems (Windows, macOS).
+  // Linux is case-sensitive so lowercasing would bypass the check.
+  const caseInsensitive = process.platform === 'win32' || process.platform === 'darwin';
+  const normTarget = caseInsensitive ? realTarget.toLowerCase() : realTarget;
+  const normRoot = caseInsensitive ? realRoot.toLowerCase() : realRoot;
+  if (normTarget !== normRoot && !normTarget.startsWith(normRoot + path.sep)) {
+    throw new Error(
+      `Image folder resolves to a path outside the workspace (possible symlink escape): ${realTarget}`,
+    );
+  }
+  return realTarget;
+}
+
 export function createImageStore(): ImageStore {
   return {
     async save(imageBuffer: Buffer, format: ClipboardFormat = 'png'): Promise<string> {
       validateImage(imageBuffer, format);
 
       const folder = getImageFolderPath();
+      const root = getWorkspaceRoot();
       await fs.promises.mkdir(folder, { recursive: true });
+
+      // Verify the resolved folder stays within the workspace
+      await assertInsideWorkspace(folder, root);
 
       const fileName = generateFileName(format);
       const filePath = path.join(folder, fileName);
-      await fs.promises.writeFile(filePath, imageBuffer, { mode: 0o600 });
+      await writeSecureFile(filePath, imageBuffer);
+
+      // Defense-in-depth: verify the saved file also stays within the workspace
+      await assertInsideWorkspace(filePath, root);
 
       logger.info(`Saved image: ${filePath}`);
 

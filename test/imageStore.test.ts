@@ -66,6 +66,8 @@ beforeEach(() => {
   vi.mocked(fs.promises.readdir).mockResolvedValue([] as unknown as fs.Dirent[]);
   vi.mocked(fs.promises.unlink).mockResolvedValue(undefined);
   vi.mocked(fs.promises.readFile).mockRejectedValue(new Error('ENOENT'));
+  // realpath returns the input path by default (no symlinks)
+  vi.mocked(fs.promises.realpath).mockImplementation(async (p) => String(p));
 });
 
 describe('createImageStore', () => {

@@ -329,7 +329,7 @@ describe('image/convert', () => {
 
       expect(mockedExecBuffer).toHaveBeenCalledWith(
         '/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe',
-        ['-NoProfile', '-Command', expect.stringContaining('ImageFormat]::Png')],
+        ['-NoProfile', '-EncodedCommand', expect.any(String)],
         { input: inputData },
       );
     });
@@ -351,7 +351,7 @@ describe('image/convert', () => {
 
       expect(mockedExecBuffer).toHaveBeenCalledWith(
         'powershell.exe',
-        ['-NoProfile', '-Command', expect.stringContaining('ImageFormat]::Jpeg')],
+        ['-NoProfile', '-EncodedCommand', expect.any(String)],
         { input: inputData },
       );
     });

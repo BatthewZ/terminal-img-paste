@@ -9,6 +9,11 @@ vi.mock("../src/util/exec", () => ({
 }));
 
 // ---------------------------------------------------------------------------
+// Mock: ../src/util/toolPath  (avoid real `which` calls in tests)
+// ---------------------------------------------------------------------------
+vi.mock("../src/util/toolPath");
+
+// ---------------------------------------------------------------------------
 // Mock: fs  (used by PowerShellClipboardReader.readImage)
 // ---------------------------------------------------------------------------
 vi.mock("fs", () => {
@@ -39,12 +44,19 @@ import { WindowsClipboardReader } from "../src/clipboard/windowsClipboard";
 import { WslClipboardReader } from "../src/clipboard/wslClipboard";
 import { FallbackClipboardReader } from "../src/clipboard/fallback";
 import type { PlatformInfo } from "../src/platform/detect";
+import { resolveToolPathOrFallback } from "../src/util/toolPath";
 
 // Convenience typed references to the mocked functions
 const mockExec = vi.mocked(exec);
 const mockExecBuffer = vi.mocked(execBuffer);
 const mockReadFile = vi.mocked(fs.promises.readFile);
 const mockUnlink = vi.mocked(fs.promises.unlink);
+const mockResolveToolPathOrFallback = vi.mocked(resolveToolPathOrFallback);
+
+// Re-establish toolPath mock after mockReset clears implementations
+beforeEach(() => {
+  mockResolveToolPathOrFallback.mockImplementation(async (name: string) => name);
+});
 
 // ---------------------------------------------------------------------------
 // Helpers — platform info fixtures
@@ -53,6 +65,8 @@ function makePlatform(overrides: Partial<PlatformInfo> = {}): PlatformInfo {
   return {
     os: "linux",
     isWSL: false,
+    wslVersion: null,
+    hasWslg: false,
     displayServer: "x11",
     powershellPath: null,
     ...overrides,
@@ -100,22 +114,56 @@ describe("createClipboardReader", () => {
     expect(reader).toBeInstanceOf(WslClipboardReader);
   });
 
-  it("returns FallbackClipboardReader for WSL with WAYLAND_DISPLAY", () => {
+  it("returns FallbackClipboardReader for WSL with display server but no WSLg (PowerShell first)", () => {
     const reader = createClipboardReader(
-      makePlatform({ os: "linux", isWSL: true, displayServer: "wayland", powershellPath: "/mnt/c/ps.exe" }),
+      makePlatform({ os: "linux", isWSL: true, hasWslg: false, displayServer: "wayland", powershellPath: "/mnt/c/ps.exe" }),
     );
     expect(reader).toBeInstanceOf(FallbackClipboardReader);
-    expect(reader.requiredTool()).toContain("PowerShell (via WSL interop)");
-    expect(reader.requiredTool()).toContain("wl-paste");
+    // PowerShell should be listed first (before wl-paste) when WSLg is absent
+    const tool = reader.requiredTool();
+    expect(tool).toContain("PowerShell (via WSL interop)");
+    expect(tool).toContain("wl-paste");
   });
 
-  it("returns FallbackClipboardReader for WSL with DISPLAY (x11)", () => {
+  it("returns FallbackClipboardReader for WSL with DISPLAY but no WSLg (PowerShell first)", () => {
     const reader = createClipboardReader(
-      makePlatform({ os: "linux", isWSL: true, displayServer: "x11", powershellPath: "/mnt/c/ps.exe" }),
+      makePlatform({ os: "linux", isWSL: true, hasWslg: false, displayServer: "x11", powershellPath: "/mnt/c/ps.exe" }),
     );
     expect(reader).toBeInstanceOf(FallbackClipboardReader);
-    expect(reader.requiredTool()).toContain("PowerShell (via WSL interop)");
-    expect(reader.requiredTool()).toContain("xclip");
+    const tool = reader.requiredTool();
+    expect(tool).toContain("PowerShell (via WSL interop)");
+    expect(tool).toContain("xclip");
+  });
+
+  it("prefers native Linux reader when WSLg is available (wl-paste first)", () => {
+    const reader = createClipboardReader(
+      makePlatform({ os: "linux", isWSL: true, hasWslg: true, displayServer: "wayland", powershellPath: "/mnt/c/ps.exe" }),
+    );
+    expect(reader).toBeInstanceOf(FallbackClipboardReader);
+    const tool = reader.requiredTool();
+    // With WSLg, wl-paste should be listed before PowerShell
+    expect(tool.indexOf("wl-paste")).toBeLessThan(
+      tool.indexOf("PowerShell"),
+    );
+  });
+
+  it("prefers native Linux reader when WSLg is available (xclip first for x11)", () => {
+    const reader = createClipboardReader(
+      makePlatform({ os: "linux", isWSL: true, hasWslg: true, displayServer: "x11", powershellPath: "/mnt/c/ps.exe" }),
+    );
+    expect(reader).toBeInstanceOf(FallbackClipboardReader);
+    const tool = reader.requiredTool();
+    expect(tool.indexOf("xclip")).toBeLessThan(
+      tool.indexOf("PowerShell"),
+    );
+  });
+
+  it("returns plain WslClipboardReader for WSLg without display server", () => {
+    // WSLg detected but no DISPLAY/WAYLAND_DISPLAY set (unusual but possible)
+    const reader = createClipboardReader(
+      makePlatform({ os: "linux", isWSL: true, hasWslg: true, displayServer: "unknown", powershellPath: "/mnt/c/ps.exe" }),
+    );
+    expect(reader).toBeInstanceOf(WslClipboardReader);
   });
 });
 
@@ -545,8 +593,8 @@ describe("WindowsClipboardReader", () => {
       mockExec.mockResolvedValueOnce({ stdout: "yes\r\n", stderr: "" });
       expect(await reader.hasImage()).toBe(true);
       expect(mockExec).toHaveBeenCalledWith("powershell.exe", [
-        "-Command",
-        expect.stringContaining("ContainsImage"),
+        "-EncodedCommand",
+        expect.any(String),
       ]);
     });
 
@@ -808,7 +856,7 @@ describe("readImage error paths", () => {
       );
     });
 
-    it("throws when wslpath fails", async () => {
+    it("throws with wslpath context when wslpath fails", async () => {
       const winPath = "C:\\Temp\\img.tmp";
       // hasImage -> yes
       mockExec.mockResolvedValueOnce({ stdout: "yes\r\n", stderr: "" });
@@ -816,7 +864,28 @@ describe("readImage error paths", () => {
       mockExec.mockResolvedValueOnce({ stdout: `${winPath}\r\n`, stderr: "" });
       // wslpath -> fails
       mockExec.mockRejectedValueOnce(new Error("wslpath: command not found"));
-      await expect(reader.readImage()).rejects.toThrow("wslpath: command not found");
+      await expect(reader.readImage()).rejects.toThrow("wslpath conversion failed");
+    });
+
+    it("throws with PowerShell context when PS execution fails", async () => {
+      // hasImage -> yes
+      mockExec.mockResolvedValueOnce({ stdout: "yes\r\n", stderr: "" });
+      // PS_READ_IMAGE -> fails
+      mockExec.mockRejectedValueOnce(new Error("powershell.exe not found"));
+      await expect(reader.readImage()).rejects.toThrow("PowerShell execution failed");
+    });
+
+    it("throws with temp file context when readFile fails", async () => {
+      // hasImage -> yes
+      mockExec.mockResolvedValueOnce({ stdout: "yes\r\n", stderr: "" });
+      // PS_READ_IMAGE -> returns temp path
+      mockExec.mockResolvedValueOnce({ stdout: "C:\\Temp\\img.tmp\r\n", stderr: "" });
+      // wslpath -> success
+      mockExec.mockResolvedValueOnce({ stdout: "/tmp/img.tmp\n", stderr: "" });
+      // readFile -> fails
+      mockReadFile.mockRejectedValueOnce(new Error("ENOENT: no such file or directory"));
+      mockUnlink.mockResolvedValueOnce(undefined);
+      await expect(reader.readImage()).rejects.toThrow("Temp file read failed");
     });
 
     it("throws when PowerShell returns empty stdout (no temp path)", async () => {
@@ -829,7 +898,7 @@ describe("readImage error paths", () => {
       // readFile with empty path fails
       mockReadFile.mockRejectedValueOnce(new Error("ENOENT: no such file or directory, open ''"));
       mockUnlink.mockResolvedValueOnce(undefined);
-      await expect(reader.readImage()).rejects.toThrow("ENOENT");
+      await expect(reader.readImage()).rejects.toThrow("Temp file read failed");
     });
   });
 
@@ -866,20 +935,22 @@ describe("PowerShellClipboardReader (shared base behaviour)", () => {
     reader = new WindowsClipboardReader();
   });
 
-  describe("hasImage uses the PS_HAS_IMAGE script", () => {
-    it("sends the correct PowerShell command", async () => {
+  describe("hasImage uses the PS_HAS_IMAGE script via -EncodedCommand", () => {
+    it("sends the correct PowerShell encoded command", async () => {
       mockExec.mockResolvedValueOnce({ stdout: "no\n", stderr: "" });
       await reader.hasImage();
       const call = mockExec.mock.calls[0];
       expect(call[0]).toBe("powershell.exe");
-      expect(call[1][0]).toBe("-Command");
-      expect(call[1][1]).toContain("System.Windows.Forms.Clipboard");
-      expect(call[1][1]).toContain("ContainsImage");
+      expect(call[1][0]).toBe("-EncodedCommand");
+      // The encoded command is a base64 string (UTF-16LE)
+      const decoded = Buffer.from(call[1][1], "base64").toString("utf16le");
+      expect(decoded).toContain("System.Windows.Forms.Clipboard");
+      expect(decoded).toContain("ContainsImage");
     });
   });
 
-  describe("readImage uses the PS_READ_IMAGE script", () => {
-    it("sends the correct PowerShell command for reading", async () => {
+  describe("readImage uses the PS_READ_IMAGE script via -EncodedCommand", () => {
+    it("sends the correct PowerShell encoded command for reading", async () => {
       const fakeImage = Buffer.from("BASE-IMG");
       mockExec.mockResolvedValueOnce({ stdout: "yes\r\n", stderr: "" });
       mockExec.mockResolvedValueOnce({
@@ -894,10 +965,11 @@ describe("PowerShellClipboardReader (shared base behaviour)", () => {
       // Second exec call is the PS_READ_IMAGE command
       const readCall = mockExec.mock.calls[1];
       expect(readCall[0]).toBe("powershell.exe");
-      expect(readCall[1][0]).toBe("-Command");
-      expect(readCall[1][1]).toContain("GetImage");
-      expect(readCall[1][1]).toContain("GetTempFileName");
-      expect(readCall[1][1]).toContain("ImageFormat");
+      expect(readCall[1][0]).toBe("-EncodedCommand");
+      const decoded = Buffer.from(readCall[1][1], "base64").toString("utf16le");
+      expect(decoded).toContain("GetImage");
+      expect(decoded).toContain("GetTempFileName");
+      expect(decoded).toContain("ImageFormat");
     });
   });
 

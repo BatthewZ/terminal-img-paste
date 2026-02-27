@@ -4,6 +4,8 @@ import * as path from 'path';
 import { PlatformInfo } from '../platform/detect';
 import { ClipboardFormat } from '../clipboard/types';
 import { exec, execBuffer } from '../util/exec';
+import { writeSecureFile } from '../util/fs';
+import { encodePowerShellCommand } from '../util/powershell';
 import { logger } from '../util/logger';
 
 export type SaveFormat = 'auto' | 'png' | 'jpeg';
@@ -111,7 +113,7 @@ async function convertWithSips(
   const targetExt = targetFormat === 'jpeg' ? 'jpg' : 'png';
   const outputPath = path.join(tmpDir, `tip-convert-out-${Date.now()}.${targetExt}`);
 
-  await fs.promises.writeFile(inputPath, data, { mode: 0o600 });
+  await writeSecureFile(inputPath, data);
   try {
     const sipsFormat = targetFormat === 'jpeg' ? 'jpeg' : 'png';
     await exec('sips', [
@@ -190,7 +192,7 @@ $outMs.Dispose()
 `;
   const result = await execBuffer(
     powershellPath,
-    ['-NoProfile', '-Command', script],
+    ['-NoProfile', '-EncodedCommand', encodePowerShellCommand(script)],
     { input: data },
   );
   return result.stdout;

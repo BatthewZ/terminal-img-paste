@@ -11,9 +11,21 @@ export { ClipboardReader } from "./types";
 
 export function createClipboardReader(platform: PlatformInfo): ClipboardReader {
   if (platform.isWSL) {
-    const readers: ClipboardReader[] = [new WslClipboardReader(platform)];
+    const hasDisplayServer =
+      platform.displayServer === "x11" || platform.displayServer === "wayland";
 
-    if (platform.displayServer === "x11" || platform.displayServer === "wayland") {
+    // When WSLg is available, prefer native Linux clipboard tools (faster, more
+    // reliable) over PowerShell interop, falling back to PowerShell.
+    // Without WSLg, PowerShell interop is the primary (and possibly only) reader.
+    if (platform.hasWslg && hasDisplayServer) {
+      return new FallbackClipboardReader([
+        new LinuxClipboardReader(platform.displayServer),
+        new WslClipboardReader(platform),
+      ]);
+    }
+
+    const readers: ClipboardReader[] = [new WslClipboardReader(platform)];
+    if (hasDisplayServer) {
       readers.push(new LinuxClipboardReader(platform.displayServer));
     }
 

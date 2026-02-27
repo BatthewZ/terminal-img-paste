@@ -1,8 +1,11 @@
 import * as fs from "fs";
+import { execFileSync } from "child_process";
 
 export interface PlatformInfo {
   os: "macos" | "linux" | "windows";
   isWSL: boolean;
+  wslVersion: 1 | 2 | null;
+  hasWslg: boolean;
   displayServer: "x11" | "wayland" | "unknown";
   powershellPath: string | null;
 }
@@ -20,13 +23,35 @@ function detectOS(): PlatformInfo["os"] {
   }
 }
 
-function detectWSL(): boolean {
+function readProcVersion(): string | null {
   try {
-    const procVersion = fs.readFileSync("/proc/version", "utf-8");
-    return /microsoft/i.test(procVersion);
+    return fs.readFileSync("/proc/version", "utf-8");
   } catch {
+    return null;
+  }
+}
+
+function detectWSL(procVersion: string | null): boolean {
+  if (!procVersion) {
     return false;
   }
+  return /microsoft/i.test(procVersion);
+}
+
+function detectWslVersion(procVersion: string | null): 1 | 2 | null {
+  if (!procVersion || !detectWSL(procVersion)) {
+    return null;
+  }
+  // WSL2 kernels contain "microsoft-standard-WSL2"
+  if (/microsoft-standard-WSL2/i.test(procVersion)) {
+    return 2;
+  }
+  // WSL1 kernels contain "Microsoft" but not "microsoft-standard-WSL2"
+  return 1;
+}
+
+function detectWslg(): boolean {
+  return fs.existsSync("/mnt/wslg/");
 }
 
 function detectDisplayServer(
@@ -66,6 +91,18 @@ function detectDisplayServer(
   return "unknown";
 }
 
+function whichSync(name: string): string | null {
+  try {
+    return execFileSync("command", ["-v", name], {
+      encoding: "utf-8",
+      timeout: 5000,
+      shell: true,
+    }).trim() || null;
+  } catch {
+    return null;
+  }
+}
+
 function detectPowershellPath(
   os: PlatformInfo["os"],
   isWSL: boolean
@@ -75,6 +112,7 @@ function detectPowershellPath(
   }
 
   if (isWSL) {
+    // 1. Check well-known filesystem paths (fast, no subprocess)
     const candidates = [
       "/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe",
       "/mnt/c/Program Files/PowerShell/7/pwsh.exe",
@@ -86,7 +124,14 @@ function detectPowershellPath(
       }
     }
 
-    // Fall back to powershell.exe which may be in PATH via interop
+    // 2. Try PATH-based discovery (handles non-standard mount points)
+    const fromPath =
+      whichSync("powershell.exe") ?? whichSync("pwsh.exe");
+    if (fromPath) {
+      return fromPath;
+    }
+
+    // 3. Last resort: rely on WSL interop PATH
     return "powershell.exe";
   }
 
@@ -99,10 +144,13 @@ export function detectPlatform(): PlatformInfo {
   }
 
   const os = detectOS();
-  const isWSL = os === "linux" ? detectWSL() : false;
+  const procVersion = os === "linux" ? readProcVersion() : null;
+  const isWSL = os === "linux" ? detectWSL(procVersion) : false;
+  const wslVersion = isWSL ? detectWslVersion(procVersion) : null;
+  const hasWslg = isWSL ? detectWslg() : false;
   const displayServer = detectDisplayServer(os, isWSL);
   const powershellPath = detectPowershellPath(os, isWSL);
 
-  cached = { os, isWSL, displayServer, powershellPath };
+  cached = { os, isWSL, wslVersion, hasWslg, displayServer, powershellPath };
   return cached;
 }

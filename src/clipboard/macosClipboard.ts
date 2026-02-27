@@ -1,5 +1,6 @@
 import { ClipboardReader, ClipboardFormat, ClipboardImageResult } from "./types";
 import { exec, execBuffer } from "../util/exec";
+import { resolveToolPathOrFallback } from "../util/toolPath";
 
 /** Fetch raw clipboard info string from osascript (shared by macOS readers). */
 export async function getClipboardInfo(): Promise<string> {
@@ -26,6 +27,15 @@ export function parseClipboardFormats(info: string): ClipboardFormat[] {
 }
 
 export class MacosClipboardReader implements ClipboardReader {
+  private resolvedPngpastePath: string | undefined;
+
+  private async getPngpastePath(): Promise<string> {
+    if (this.resolvedPngpastePath === undefined) {
+      this.resolvedPngpastePath = await resolveToolPathOrFallback("pngpaste");
+    }
+    return this.resolvedPngpastePath;
+  }
+
   requiredTool(): string {
     return "pngpaste";
   }
@@ -62,7 +72,8 @@ export class MacosClipboardReader implements ClipboardReader {
     if (!imageAvailable) {
       throw new Error("No image found in clipboard");
     }
-    const { stdout } = await execBuffer("pngpaste", ["-"]);
+    const pngpaste = await this.getPngpastePath();
+    const { stdout } = await execBuffer(pngpaste, ["-"]);
     return { data: stdout, format: "png" };
   }
 }
