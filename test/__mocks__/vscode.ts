@@ -20,13 +20,61 @@ export const commands = {
   }),
 };
 
+/** Factory that creates a mock WebviewPanel for tests. */
+function createMockWebviewPanel() {
+  const messageListeners: Array<(msg: unknown) => void> = [];
+  const disposeListeners: Array<() => void> = [];
+
+  const panel = {
+    webview: {
+      html: '',
+      onDidReceiveMessage: vi.fn((listener: (msg: unknown) => void) => {
+        messageListeners.push(listener);
+        return { dispose: vi.fn() };
+      }),
+      postMessage: vi.fn(),
+    },
+    onDidDispose: vi.fn((listener: () => void) => {
+      disposeListeners.push(listener);
+      return { dispose: vi.fn() };
+    }),
+    dispose: vi.fn(() => {
+      disposeListeners.forEach((l) => l());
+    }),
+    reveal: vi.fn(),
+    // Test helpers
+    __simulateMessage: (msg: unknown) => {
+      messageListeners.forEach((l) => l(msg));
+    },
+    __simulateDispose: () => {
+      disposeListeners.forEach((l) => l());
+    },
+  };
+  return panel;
+}
+
+// Store last created panel for test access
+let __lastCreatedPanel: ReturnType<typeof createMockWebviewPanel> | null = null;
+
 export const window = {
   createOutputChannel: vi.fn(() => outputChannel),
+  createWebviewPanel: vi.fn((..._args: unknown[]) => {
+    __lastCreatedPanel = createMockWebviewPanel();
+    return __lastCreatedPanel;
+  }),
   showErrorMessage: vi.fn(),
   showWarningMessage: vi.fn(),
   showInformationMessage: vi.fn(),
   setStatusBarMessage: vi.fn(),
   activeTerminal: terminal,
+};
+
+export const ViewColumn = {
+  One: 1,
+  Two: 2,
+  Three: 3,
+  Active: -1,
+  Beside: -2,
 };
 
 const configValues: Record<string, unknown> = {
@@ -35,6 +83,7 @@ const configValues: Record<string, unknown> = {
   autoGitIgnore: true,
   sendNewline: false,
   saveFormat: 'auto',
+  showPreview: false,
   warnOnRemote: true,
   notifications: 'all',
 };
@@ -71,6 +120,7 @@ export function __resetConfig(): void {
   configValues.autoGitIgnore = true;
   configValues.sendNewline = false;
   configValues.saveFormat = 'auto';
+  configValues.showPreview = false;
   configValues.warnOnRemote = true;
   configValues.notifications = 'all';
 }
@@ -88,4 +138,14 @@ export function __getRegisteredCommand(id: string): ((...args: unknown[]) => unk
 // Helper to clear registered commands between tests
 export function __clearRegisteredCommands(): void {
   registeredCommands.clear();
+}
+
+// Helper to get last created webview panel for test assertions
+export function __getLastCreatedPanel() {
+  return __lastCreatedPanel;
+}
+
+// Helper to clear last panel reference
+export function __clearLastPanel(): void {
+  __lastCreatedPanel = null;
 }

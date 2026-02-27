@@ -87,6 +87,11 @@
           "default": true,
           "description": "Show a warning when pasting clipboard images in a remote terminal (SSH, container, etc.) since the saved path may not be accessible remotely."
         },
+        "terminalImgPaste.showPreview": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show a preview of the clipboard image before saving. When enabled, a confirmation dialog appears so you can verify the image before pasting."
+        },
         "terminalImgPaste.notifications": {
           "type": "string",
           "enum": ["all", "errors", "none"],

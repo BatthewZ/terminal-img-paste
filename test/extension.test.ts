@@ -54,6 +54,10 @@ vi.mock('../src/platform/remote', () => ({
   detectRemoteContext: vi.fn(() => ({ remote: false })),
 }));
 
+vi.mock('../src/views/previewPanel', () => ({
+  showImagePreview: vi.fn().mockResolvedValue(true),
+}));
+
 // Import after mocks
 import { activate, deactivate } from '../src/extension';
 import { createClipboardReader } from '../src/clipboard/index';
@@ -61,6 +65,7 @@ import { createImageStore } from '../src/storage/imageStore';
 import { insertPathToTerminal } from '../src/terminal/insertPath';
 import { convertImage } from '../src/image/convert';
 import { detectRemoteContext } from '../src/platform/remote';
+import { showImagePreview } from '../src/views/previewPanel';
 import { logger } from '../src/util/logger';
 import { notify } from '../src/util/notify';
 
@@ -463,6 +468,63 @@ describe('sendPathToTerminal command handler', () => {
       'Path sent to terminal',
       3000,
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Image preview before save
+// ---------------------------------------------------------------------------
+describe('pasteImage preview integration', () => {
+  it('shows preview and saves when user confirms (showPreview enabled)', async () => {
+    __setConfig('showPreview', true);
+    vi.mocked(showImagePreview).mockResolvedValue(true);
+
+    activate(makeContext());
+    const handler = __getRegisteredCommand('terminalImgPaste.pasteImage')!;
+    await handler();
+
+    expect(showImagePreview).toHaveBeenCalledWith(Buffer.from('PNG'), 'png');
+    expect(insertPathToTerminal).toHaveBeenCalled();
+  });
+
+  it('shows preview and does NOT save when user cancels (showPreview enabled)', async () => {
+    __setConfig('showPreview', true);
+    vi.mocked(showImagePreview).mockResolvedValue(false);
+
+    activate(makeContext());
+    const handler = __getRegisteredCommand('terminalImgPaste.pasteImage')!;
+    await handler();
+
+    expect(showImagePreview).toHaveBeenCalled();
+    expect(insertPathToTerminal).not.toHaveBeenCalled();
+    expect(notify.statusBar).toHaveBeenCalledWith('Image paste cancelled', 3000);
+  });
+
+  it('skips preview when showPreview is disabled (default)', async () => {
+    __setConfig('showPreview', false);
+
+    activate(makeContext());
+    const handler = __getRegisteredCommand('terminalImgPaste.pasteImage')!;
+    await handler();
+
+    expect(showImagePreview).not.toHaveBeenCalled();
+    expect(insertPathToTerminal).toHaveBeenCalled();
+  });
+
+  it('passes correct image data and format to preview', async () => {
+    __setConfig('showPreview', true);
+    vi.mocked(showImagePreview).mockResolvedValue(true);
+
+    const reader = makeMockReader({
+      readImage: vi.fn().mockResolvedValue({ data: Buffer.from('JPEG-DATA'), format: 'jpeg' }),
+    });
+    vi.mocked(createClipboardReader).mockReturnValue(reader as any);
+
+    activate(makeContext());
+    const handler = __getRegisteredCommand('terminalImgPaste.pasteImage')!;
+    await handler();
+
+    expect(showImagePreview).toHaveBeenCalledWith(Buffer.from('JPEG-DATA'), 'jpeg');
   });
 });
 

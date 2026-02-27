@@ -5,6 +5,7 @@ import { createClipboardReader, ClipboardReader } from './clipboard/index';
 import { createImageStore, ImageStore } from './storage/imageStore';
 import { insertPathToTerminal } from './terminal/insertPath';
 import { convertImage, SaveFormat } from './image/convert';
+import { showImagePreview } from './views/previewPanel';
 import { logger } from './util/logger';
 import { notify } from './util/notify';
 import { Mutex } from './util/mutex';
@@ -72,6 +73,15 @@ export function activate(context: vscode.ExtensionContext): void {
         }
 
         const { data, format } = await reader.readImage();
+
+        const showPreview = config.get<boolean>('showPreview', false);
+        if (showPreview) {
+          const confirmed = await showImagePreview(data, format);
+          if (!confirmed) {
+            notify.statusBar('Image paste cancelled', 3000);
+            return;
+          }
+        }
 
         const saveFormat = config.get<SaveFormat>('saveFormat', 'auto');
         const converted = await convertImage(data, format, saveFormat, platform);
