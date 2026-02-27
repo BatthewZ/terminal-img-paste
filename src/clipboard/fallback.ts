@@ -40,8 +40,7 @@ export class FallbackClipboardReader implements ClipboardReader {
           return true;
         }
       } catch (err) {
-        logger.warn(`Clipboard reader ${reader.requiredTool()} failed hasImage(): ${err}`);
-        continue;
+        logger.warn(`Clipboard reader ${reader.requiredTool()} failed hasImage()`, err);
       }
     }
     return false;
