@@ -28,6 +28,21 @@ function detectFormatFromMimeTypes(
   return null;
 }
 
+/** Find the best MIME type and its format from a clipboard type list. */
+function detectMimeAndFormat(
+  mimeList: string,
+): { mime: string; format: ClipboardFormat } | null {
+  for (const [mime, format] of MIME_FORMAT_MAP) {
+    if (mimeList.includes(mime)) {
+      return { mime, format };
+    }
+  }
+  if (/^image\//m.test(mimeList)) {
+    return { mime: "image/png", format: "unknown" };
+  }
+  return null;
+}
+
 export class LinuxClipboardReader implements ClipboardReader {
   private displayServer: PlatformInfo["displayServer"];
 
@@ -94,15 +109,13 @@ export class LinuxClipboardReader implements ClipboardReader {
     throw new Error("No image found in clipboard");
   }
 
-  /** Map a ClipboardFormat to its MIME type string, using MIME_FORMAT_MAP as source of truth. */
-  private formatToMime(format: ClipboardFormat): string {
-    const entry = MIME_FORMAT_MAP.find(([, f]) => f === format);
-    return entry ? entry[0] : "image/png";
-  }
-
   async readImage(): Promise<ClipboardImageResult> {
-    const format = await this.detectFormat();
-    const mime = this.formatToMime(format);
+    const types = await this.getClipboardTypes();
+    const detected = detectMimeAndFormat(types);
+    if (!detected) {
+      throw new Error("No image found in clipboard");
+    }
+    const { mime, format } = detected;
     const resolvedFormat = format === "unknown" ? "png" : format;
 
     const { stdout } = this.isWayland()

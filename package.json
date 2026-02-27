@@ -64,6 +64,12 @@
           "type": "boolean",
           "default": false,
           "description": "Auto-press Enter after inserting path into terminal"
+        },
+        "terminalImgPaste.saveFormat": {
+          "type": "string",
+          "enum": ["auto", "png", "jpeg"],
+          "default": "auto",
+          "description": "Image save format. 'auto' preserves native format, 'png' or 'jpeg' forces conversion."
         }
       }
     }
