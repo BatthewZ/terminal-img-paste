@@ -182,18 +182,28 @@ describe("FallbackClipboardReader", () => {
       expect(await fb.readImage()).toEqual(result);
     });
 
-    it("skips reader whose tool is unavailable", async () => {
-      const spy = vi.fn();
+    it("falls through when first reader readImage throws, returns second result", async () => {
       const result: ClipboardImageResult = { data: Buffer.from("from-second"), format: "jpeg" };
       const fb = new FallbackClipboardReader([
         createMockReader({
-          isToolAvailable: async () => false,
-          readImage: spy,
+          readImage: async () => { throw new Error("tool not found"); },
         }),
         createMockReader({ readImage: async () => result }),
       ]);
       expect(await fb.readImage()).toEqual(result);
-      expect(spy).not.toHaveBeenCalled();
+    });
+
+    it("does not call isToolAvailable during readImage", async () => {
+      const isToolSpy = vi.fn().mockResolvedValue(true);
+      const result: ClipboardImageResult = { data: Buffer.from("data"), format: "png" };
+      const fb = new FallbackClipboardReader([
+        createMockReader({
+          isToolAvailable: isToolSpy,
+          readImage: async () => result,
+        }),
+      ]);
+      await fb.readImage();
+      expect(isToolSpy).not.toHaveBeenCalled();
     });
 
     it("falls through when first reader available but throws on read", async () => {
@@ -227,8 +237,9 @@ describe("FallbackClipboardReader", () => {
     it("throws AggregateError when all readers fail", async () => {
       const fb = new FallbackClipboardReader([
         createMockReader({
-          requiredTool: () => "tool-a",
-          isToolAvailable: async () => false,
+          readImage: async () => {
+            throw new Error("tool-a not found");
+          },
         }),
         createMockReader({
           readImage: async () => {
@@ -245,8 +256,7 @@ describe("FallbackClipboardReader", () => {
         expect(err).toBeInstanceOf(AggregateError);
         const agg = err as AggregateError;
         expect(agg.errors).toHaveLength(2);
-        expect(agg.errors[0].message).toContain("tool-a");
-        expect(agg.errors[0].message).toContain("tool not available");
+        expect(agg.errors[0].message).toBe("tool-a not found");
         expect(agg.errors[1].message).toBe("tool-b crashed");
       }
     });
@@ -259,8 +269,9 @@ describe("FallbackClipboardReader", () => {
           },
         }),
         createMockReader({
-          isToolAvailable: async () => false,
-          requiredTool: () => "unavailable",
+          readImage: async () => {
+            throw new Error("also failed");
+          },
         }),
       ]);
       await expect(fb.readImage()).rejects.toThrow(

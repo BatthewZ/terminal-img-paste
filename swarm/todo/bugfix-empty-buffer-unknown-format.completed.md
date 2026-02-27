@@ -41,3 +41,18 @@ async save(imageBuffer: Buffer, format: ClipboardFormat = 'png'): Promise<string
 
 ## Dependencies
 None
+
+## Completion Notes
+
+**Fixed by agent 7b5aa343 (task 916b30d6)**
+
+### Changes made:
+
+1. **`src/storage/imageStore.ts`**: Added `imageBuffer.length === 0` guard at the top of `save()`, before `validateImage()`, throwing `'Cannot save empty image data'`
+
+2. **`test/imageStore.test.ts`**:
+   - Updated existing "rejects an empty buffer" test to match new error message
+   - Added "rejects empty buffer even for unknown format" test
+   - Added "rejects empty buffer for any format" parametric test covering all 6 formats
+
+All 492 tests pass. Compile succeeds.

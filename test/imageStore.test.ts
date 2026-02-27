@@ -372,7 +372,7 @@ describe('createImageStore', () => {
     it('rejects an empty buffer', async () => {
       const store = createImageStore();
       await expect(store.save(Buffer.alloc(0))).rejects.toThrow(
-        'Clipboard data is not a valid PNG image',
+        'Cannot save empty image data',
       );
     });
 
@@ -428,6 +428,22 @@ describe('createImageStore', () => {
       const store = createImageStore();
       const result = await store.save(Buffer.from('arbitrary-data'), 'unknown');
       expect(result).toMatch(/\.png$/);
+    });
+
+    it('rejects empty buffer even for unknown format', async () => {
+      const store = createImageStore();
+      await expect(store.save(Buffer.alloc(0), 'unknown')).rejects.toThrow(
+        'Cannot save empty image data',
+      );
+    });
+
+    it('rejects empty buffer for any format', async () => {
+      const store = createImageStore();
+      for (const fmt of ['png', 'jpeg', 'bmp', 'webp', 'tiff', 'unknown'] as const) {
+        await expect(store.save(Buffer.alloc(0), fmt)).rejects.toThrow(
+          'Cannot save empty image data',
+        );
+      }
     });
 
     it('validates JPEG magic bytes (accepts valid)', async () => {
@@ -904,15 +920,15 @@ describe('createImageStore', () => {
 
       // Mock readdir to return different results for different paths
       const rootEntries = [
-        { name: '2026-01-01', isDirectory: () => true, isFile: () => false },
-        { name: '2026-01-02', isDirectory: () => true, isFile: () => false },
+        { name: '2026-01-01', isDirectory: () => true, isFile: () => false, isSymbolicLink: () => false },
+        { name: '2026-01-02', isDirectory: () => true, isFile: () => false, isSymbolicLink: () => false },
       ];
       const dir1Entries = [
-        { name: 'img-2026-01-01T00-00-00-000.png', isDirectory: () => false, isFile: () => true },
-        { name: 'img-2026-01-01T12-00-00-000.png', isDirectory: () => false, isFile: () => true },
+        { name: 'img-2026-01-01T00-00-00-000.png', isDirectory: () => false, isFile: () => true, isSymbolicLink: () => false },
+        { name: 'img-2026-01-01T12-00-00-000.png', isDirectory: () => false, isFile: () => true, isSymbolicLink: () => false },
       ];
       const dir2Entries = [
-        { name: 'img-2026-01-02T00-00-00-000.png', isDirectory: () => false, isFile: () => true },
+        { name: 'img-2026-01-02T00-00-00-000.png', isDirectory: () => false, isFile: () => true, isSymbolicLink: () => false },
       ];
 
       vi.mocked(fs.promises.readdir).mockImplementation(async (p: any, opts?: any) => {
@@ -939,14 +955,14 @@ describe('createImageStore', () => {
       setConfig('organizeFolders', 'daily');
 
       const rootEntries = [
-        { name: '2026-01-01', isDirectory: () => true, isFile: () => false },
-        { name: '2026-01-02', isDirectory: () => true, isFile: () => false },
+        { name: '2026-01-01', isDirectory: () => true, isFile: () => false, isSymbolicLink: () => false },
+        { name: '2026-01-02', isDirectory: () => true, isFile: () => false, isSymbolicLink: () => false },
       ];
       const dir1Entries = [
-        { name: 'img-2026-01-01T00-00-00-000.png', isDirectory: () => false, isFile: () => true },
+        { name: 'img-2026-01-01T00-00-00-000.png', isDirectory: () => false, isFile: () => true, isSymbolicLink: () => false },
       ];
       const dir2Entries = [
-        { name: 'img-2026-01-02T00-00-00-000.png', isDirectory: () => false, isFile: () => true },
+        { name: 'img-2026-01-02T00-00-00-000.png', isDirectory: () => false, isFile: () => true, isSymbolicLink: () => false },
       ];
 
       let dir1Deleted = false;
@@ -982,8 +998,8 @@ describe('createImageStore', () => {
 
       // Root has one file directly (edge case)
       const rootEntries = [
-        { name: 'img-stray.png', isDirectory: () => false, isFile: () => true },
-        { name: 'img-newer.png', isDirectory: () => false, isFile: () => true },
+        { name: 'img-stray.png', isDirectory: () => false, isFile: () => true, isSymbolicLink: () => false },
+        { name: 'img-newer.png', isDirectory: () => false, isFile: () => true, isSymbolicLink: () => false },
       ];
 
       vi.mocked(fs.promises.readdir).mockImplementation(async (_p: any, opts?: any) => {
@@ -998,6 +1014,54 @@ describe('createImageStore', () => {
       expect(fs.promises.unlink).toHaveBeenCalledTimes(1);
       // Should NOT call rmdir on the root folder
       expect(fs.promises.rmdir).not.toHaveBeenCalled();
+    });
+
+    it('does not follow symlinks to directories during recursive cleanup', async () => {
+      setConfig('maxImages', 10);
+      setConfig('organizeFolders', 'daily');
+
+      const rootEntries = [
+        { name: '2026-01-01', isDirectory: () => true, isFile: () => false, isSymbolicLink: () => false },
+        { name: 'external-link', isDirectory: () => true, isFile: () => false, isSymbolicLink: () => true },
+      ];
+      const dir1Entries = [
+        { name: 'img-2026-01-01T00-00-00-000.png', isDirectory: () => false, isFile: () => true, isSymbolicLink: () => false },
+      ];
+
+      vi.mocked(fs.promises.readdir).mockImplementation(async (p: any, opts?: any) => {
+        const pStr = String(p);
+        if (pStr.endsWith('2026-01-01')) return dir1Entries as any;
+        if (pStr.endsWith('external-link')) throw new Error('Should not traverse symlink');
+        if (opts && typeof opts === 'object' && 'withFileTypes' in opts) return rootEntries as any;
+        return [] as any;
+      });
+
+      const store = createImageStore();
+      await store.cleanup();
+
+      // Only the real directory's image should be counted — no traversal into symlink
+      expect(fs.promises.unlink).not.toHaveBeenCalled();
+    });
+
+    it('does not include symlinked image files in cleanup candidates', async () => {
+      setConfig('maxImages', 1);
+      setConfig('organizeFolders', 'daily');
+
+      const rootEntries = [
+        { name: 'real-img.png', isDirectory: () => false, isFile: () => true, isSymbolicLink: () => false },
+        { name: 'symlinked-img.png', isDirectory: () => false, isFile: () => true, isSymbolicLink: () => true },
+      ];
+
+      vi.mocked(fs.promises.readdir).mockImplementation(async (_p: any, opts?: any) => {
+        if (opts && typeof opts === 'object' && 'withFileTypes' in opts) return rootEntries as any;
+        return [] as any;
+      });
+
+      const store = createImageStore();
+      await store.cleanup();
+
+      // Only 1 real image, maxImages=1, nothing to delete
+      expect(fs.promises.unlink).not.toHaveBeenCalled();
     });
   });
 });

@@ -14,6 +14,11 @@ export class FallbackClipboardReader implements ClipboardReader {
     this.readers = readers;
   }
 
+  /** Expose the ordered reader chain for diagnostics. */
+  getReaders(): readonly ClipboardReader[] {
+    return this.readers;
+  }
+
   requiredTool(): string {
     return this.readers.map((r) => r.requiredTool()).join(" or ");
   }
@@ -59,12 +64,6 @@ export class FallbackClipboardReader implements ClipboardReader {
     const errors: Error[] = [];
     for (const reader of this.readers) {
       try {
-        if (!(await reader.isToolAvailable())) {
-          errors.push(
-            new Error(`${reader.requiredTool()}: tool not available`),
-          );
-          continue;
-        }
         return await reader.readImage();
       } catch (err) {
         errors.push(err instanceof Error ? err : new Error(String(err)));

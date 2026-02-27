@@ -55,11 +55,6 @@ export abstract class PowerShellClipboardReader implements ClipboardReader {
   }
 
   async readImage(): Promise<ClipboardImageResult> {
-    const has = await this.hasImage();
-    if (!has) {
-      throw new Error("No image found in clipboard");
-    }
-
     let tempPath: string;
     try {
       const result = await exec(this.powershellExe, [

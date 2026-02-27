@@ -343,6 +343,61 @@ describe('imageStore integration — organizeFolders (real fs)', () => {
     expect(fs.existsSync(dir2)).toBe(true);
   });
 
+  it('cleanup does not follow symlinks to directories', async () => {
+    setConfig('maxImages', 2);
+    setConfig('organizeFolders', 'daily');
+
+    const imageDir = path.join(tmpDir, '.tip-images');
+
+    // Create a real subdirectory with images
+    const realDir = path.join(imageDir, '2026-01-01');
+    fs.mkdirSync(realDir, { recursive: true });
+    fs.writeFileSync(path.join(realDir, 'img-2026-01-01T00-00-00-000.png'), 'real-img');
+
+    // Create an external directory with images that should NOT be touched
+    const externalDir = path.join(tmpDir, 'external-photos');
+    fs.mkdirSync(externalDir, { recursive: true });
+    fs.writeFileSync(path.join(externalDir, 'img-2025-01-01T00-00-00-000.png'), 'external-old');
+    fs.writeFileSync(path.join(externalDir, 'img-2025-01-02T00-00-00-000.png'), 'external-old2');
+
+    // Create a symlink inside the image folder pointing to external directory
+    fs.symlinkSync(externalDir, path.join(imageDir, 'link-to-external'));
+
+    const store = createImageStore();
+    // Save enough images to trigger cleanup (maxImages=2, already have 1 + save 2 more = 3 total)
+    await store.save(fakePng('new1'));
+    await new Promise((r) => setTimeout(r, 5));
+    await store.save(fakePng('new2'));
+
+    // External images should NOT have been deleted
+    expect(fs.existsSync(path.join(externalDir, 'img-2025-01-01T00-00-00-000.png'))).toBe(true);
+    expect(fs.existsSync(path.join(externalDir, 'img-2025-01-02T00-00-00-000.png'))).toBe(true);
+  });
+
+  it('cleanup does not include symlinked image files', async () => {
+    setConfig('maxImages', 2);
+    setConfig('organizeFolders', 'daily');
+
+    const imageDir = path.join(tmpDir, '.tip-images');
+    const dateDir = path.join(imageDir, '2026-01-01');
+    fs.mkdirSync(dateDir, { recursive: true });
+
+    // Create a real image
+    fs.writeFileSync(path.join(dateDir, 'img-2026-01-01T00-00-00-000.png'), 'real');
+
+    // Create an external file and symlink to it
+    const externalFile = path.join(tmpDir, 'external.png');
+    fs.writeFileSync(externalFile, 'external-content');
+    fs.symlinkSync(externalFile, path.join(dateDir, 'img-2025-12-01T00-00-00-000.png'));
+
+    const store = createImageStore();
+    await store.save(fakePng('new'));
+
+    // The external file should not be affected by cleanup
+    expect(fs.existsSync(externalFile)).toBe(true);
+    expect(fs.readFileSync(externalFile, 'utf-8')).toBe('external-content');
+  });
+
   it('sequential {n} pattern works within subdirectories', async () => {
     setConfig('filenamePattern', 'shot-{n}');
     setConfig('organizeFolders', 'daily');

@@ -22,7 +22,7 @@ export interface ImageStore {
 const DEFAULT_FOLDER_NAME = '.tip-images';
 
 /** All image file extensions managed by this store. */
-const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.tiff', '.bmp', '.webp'];
+export const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.tiff', '.bmp', '.webp'];
 
 /** Map from ClipboardFormat to file extension. */
 function formatToExtension(format: ClipboardFormat): string {
@@ -270,8 +270,8 @@ export function getSubdirectory(organize: OrganizeFolders, now: Date = new Date(
   }
 }
 
-/** Recursively collect all image files under a directory. */
-async function collectImagesRecursive(folder: string): Promise<{ filePath: string; name: string }[]> {
+/** Recursively collect all image files under a directory (skips symlinks). */
+export async function collectImagesRecursive(folder: string): Promise<{ filePath: string; name: string }[]> {
   const results: { filePath: string; name: string }[] = [];
   let entries: fs.Dirent[];
   try {
@@ -281,9 +281,9 @@ async function collectImagesRecursive(folder: string): Promise<{ filePath: strin
   }
   for (const entry of entries) {
     const fullPath = path.join(folder, entry.name);
-    if (entry.isDirectory()) {
+    if (entry.isDirectory() && !entry.isSymbolicLink()) {
       results.push(...(await collectImagesRecursive(fullPath)));
-    } else if (IMAGE_EXTENSIONS.some((ext) => entry.name.endsWith(ext))) {
+    } else if (!entry.isSymbolicLink() && IMAGE_EXTENSIONS.some((ext) => entry.name.endsWith(ext))) {
       results.push({ filePath: fullPath, name: entry.name });
     }
   }
@@ -307,6 +307,9 @@ async function removeEmptyDirs(dir: string, rootFolder: string): Promise<void> {
 export function createImageStore(): ImageStore {
   return {
     async save(imageBuffer: Buffer, format: ClipboardFormat = 'png'): Promise<string> {
+      if (imageBuffer.length === 0) {
+        throw new Error('Cannot save empty image data');
+      }
       validateImage(imageBuffer, format);
 
       const folder = getImageFolderPath();

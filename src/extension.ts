@@ -9,6 +9,8 @@ import { showImagePreview } from './views/previewPanel';
 import { logger } from './util/logger';
 import { notify } from './util/notify';
 import { Mutex } from './util/mutex';
+import { runDiagnostics } from './commands/diagnostics';
+import { createApi, type PasteResult, type TerminalImgPasteApi } from './api';
 
 function handleCommandError(commandName: string, err: unknown): void {
   const message = err instanceof Error ? err.message : String(err);
@@ -16,10 +18,12 @@ function handleCommandError(commandName: string, err: unknown): void {
   logger.error(`${commandName} command failed`, err);
 }
 
-export function activate(context: vscode.ExtensionContext): void {
+export function activate(context: vscode.ExtensionContext): TerminalImgPasteApi {
   const platform = detectPlatform();
   const reader: ClipboardReader = createClipboardReader(platform);
   const imageStore: ImageStore = createImageStore();
+  const pasteEmitter = new vscode.EventEmitter<PasteResult>();
+  context.subscriptions.push(pasteEmitter);
 
   // Check tool availability at activation — warn but don't block
   reader.isToolAvailable().then((available) => {
@@ -89,6 +93,7 @@ export function activate(context: vscode.ExtensionContext): void {
         const filePath = await imageStore.save(converted.data, converted.format);
         insertPathToTerminal(filePath);
 
+        pasteEmitter.fire({ path: filePath, format: converted.format });
         notify.statusBar('Image pasted to terminal', 3000);
       } catch (err) {
         handleCommandError('pasteImage', err);
@@ -115,8 +120,15 @@ export function activate(context: vscode.ExtensionContext): void {
     },
   );
 
-  context.subscriptions.push(pasteImageDisposable, sendPathDisposable);
+  const diagnosticsDisposable = vscode.commands.registerCommand(
+    'terminalImgPaste.showDiagnostics',
+    () => runDiagnostics(platform, reader),
+  );
+
+  context.subscriptions.push(pasteImageDisposable, sendPathDisposable, diagnosticsDisposable);
   logger.info(`Extension activated (platform: ${platform.os}, WSL: ${platform.isWSL})`);
+
+  return createApi(platform, reader, imageStore, pasteEmitter);
 }
 
 export function deactivate(): void {

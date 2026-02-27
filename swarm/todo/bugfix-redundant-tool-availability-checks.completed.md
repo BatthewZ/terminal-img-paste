@@ -31,3 +31,17 @@ Additionally, `extension.ts` line 69 calls `reader.hasImage()` before `readImage
 
 ## Dependencies
 None
+
+## Resolution (Agent 19b21726, Task 0ce55344)
+
+Implemented **Option B (minimal)**:
+
+1. **`src/clipboard/fallback.ts`**: Removed the `isToolAvailable()` check from `readImage()`. The method now simply tries each reader's `readImage()` in order, catching errors and falling through to the next. This eliminates redundant subprocess spawns since `extension.ts` already validates tool availability before calling `readImage()`.
+
+2. **`src/clipboard/powershellClipboard.ts`**: Removed the redundant `hasImage()` call from `readImage()`. The PS_READ_IMAGE script already handles the "no image" case by exiting with code 1 (`$img -eq $null → exit 1`), which produces a clear "PowerShell execution failed" error.
+
+3. **Updated tests**:
+   - `test/fallback.test.ts`: Updated `readImage` tests to reflect that `isToolAvailable()` is no longer called during `readImage()`. Added explicit test verifying `isToolAvailable` is not called.
+   - `test/clipboard.test.ts`: Removed all `hasImage` mock setups that preceded `readImage()` calls in WindowsClipboardReader and WslClipboardReader tests. Updated "no image" tests to expect PowerShell execution failure instead of "No image found" message.
+
+**Performance impact**: Eliminates 1-2 redundant PowerShell subprocess spawns per paste operation (each ~500ms+ on Windows). On WSL with fallback chains, this could save 1-2 seconds per paste.

@@ -41,3 +41,26 @@ Or alternatively, validate each discovered file path is inside the image folder 
 
 ## Dependencies
 None
+
+## Completion Notes
+
+**Fixed by agent 7b5aa343 (task 916b30d6)**
+
+### Changes made:
+
+1. **`src/storage/imageStore.ts` line 284**: Added `&& !entry.isSymbolicLink()` check to `collectImagesRecursive` for both directory traversal and file inclusion:
+   - Symlinks to directories are no longer recursed into
+   - Symlinked image files are no longer included in cleanup candidates
+
+2. **`test/imageStore.test.ts`**:
+   - Added `isSymbolicLink: () => false` to all existing mock dirent entries (required since the code now calls this method)
+   - Added 2 new unit tests:
+     - "does not follow symlinks to directories during recursive cleanup"
+     - "does not include symlinked image files in cleanup candidates"
+
+3. **`test/imageStore.integration.test.ts`**:
+   - Added 2 new integration tests using real filesystem symlinks:
+     - "cleanup does not follow symlinks to directories" — verifies external directory files are not deleted
+     - "cleanup does not include symlinked image files" — verifies symlinked files are skipped
+
+All 490 tests pass. Compile succeeds.

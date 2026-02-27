@@ -134,10 +134,20 @@ describe('activate', () => {
     );
   });
 
-  it('pushes both disposables to context.subscriptions', () => {
+  it('pushes all disposables to context.subscriptions', () => {
     const ctx = makeContext();
     activate(ctx);
-    expect(ctx.subscriptions).toHaveLength(2);
+    // 3 command disposables + 1 EventEmitter (pasteEmitter)
+    expect(ctx.subscriptions).toHaveLength(4);
+  });
+
+  it('returns API object with all expected methods', () => {
+    const api = activate(makeContext());
+    expect(api).toBeDefined();
+    expect(typeof api.pasteFromClipboard).toBe('function');
+    expect(typeof api.sendPathToTerminal).toBe('function');
+    expect(typeof api.getImageFolder).toBe('function');
+    expect(typeof api.onImagePasted).toBe('function');
   });
 
   it('logs activation with platform info', () => {

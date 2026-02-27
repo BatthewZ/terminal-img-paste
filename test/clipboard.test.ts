@@ -613,8 +613,6 @@ describe("WindowsClipboardReader", () => {
   describe("readImage", () => {
     it("reads the image via a temp file and cleans up", async () => {
       const fakeImage = Buffer.from("WIN-IMG");
-      // hasImage -> PS_HAS_IMAGE
-      mockExec.mockResolvedValueOnce({ stdout: "yes\r\n", stderr: "" });
       // readImage -> PS_READ_IMAGE (returns temp path)
       mockExec.mockResolvedValueOnce({
         stdout: "C:\\Users\\test\\AppData\\Local\\Temp\\tmp1234.tmp\r\n",
@@ -637,16 +635,14 @@ describe("WindowsClipboardReader", () => {
       );
     });
 
-    it("throws when no image is in the clipboard", async () => {
-      mockExec.mockResolvedValueOnce({ stdout: "no\r\n", stderr: "" });
+    it("throws when PowerShell script fails (no image or error)", async () => {
+      mockExec.mockRejectedValueOnce(new Error("Command failed (exit code 1)"));
       await expect(reader.readImage()).rejects.toThrow(
-        "No image found in clipboard",
+        "PowerShell execution failed",
       );
     });
 
     it("still cleans up the temp file when readFile throws", async () => {
-      // hasImage
-      mockExec.mockResolvedValueOnce({ stdout: "yes\r\n", stderr: "" });
       // PS_READ_IMAGE
       mockExec.mockResolvedValueOnce({
         stdout: "C:\\Temp\\file.tmp\r\n",
@@ -663,7 +659,6 @@ describe("WindowsClipboardReader", () => {
 
     it("does not throw when unlink cleanup fails", async () => {
       const fakeImage = Buffer.from("WIN-IMG-2");
-      mockExec.mockResolvedValueOnce({ stdout: "yes\r\n", stderr: "" });
       mockExec.mockResolvedValueOnce({
         stdout: "C:\\Temp\\file.tmp\r\n",
         stderr: "",
@@ -752,8 +747,6 @@ describe("WslClipboardReader", () => {
       const winPath = "C:\\Users\\test\\AppData\\Local\\Temp\\tmp9999.tmp";
       const linuxPath = "/mnt/c/Users/test/AppData/Local/Temp/tmp9999.tmp";
 
-      // hasImage -> PS_HAS_IMAGE
-      mockExec.mockResolvedValueOnce({ stdout: "yes\r\n", stderr: "" });
       // readImage -> PS_READ_IMAGE
       mockExec.mockResolvedValueOnce({ stdout: `${winPath}\r\n`, stderr: "" });
       // resolveTempPath -> wslpath
@@ -773,10 +766,10 @@ describe("WslClipboardReader", () => {
       expect(mockUnlink).toHaveBeenCalledWith(linuxPath);
     });
 
-    it("throws when clipboard has no image", async () => {
-      mockExec.mockResolvedValueOnce({ stdout: "no\r\n", stderr: "" });
+    it("throws when PowerShell script fails (no image or error)", async () => {
+      mockExec.mockRejectedValueOnce(new Error("Command failed (exit code 1)"));
       await expect(reader.readImage()).rejects.toThrow(
-        "No image found in clipboard",
+        "PowerShell execution failed",
       );
     });
 
@@ -784,7 +777,6 @@ describe("WslClipboardReader", () => {
       const winPath = "C:\\Temp\\fail.tmp";
       const linuxPath = "/mnt/c/Temp/fail.tmp";
 
-      mockExec.mockResolvedValueOnce({ stdout: "yes\r\n", stderr: "" });
       mockExec.mockResolvedValueOnce({ stdout: `${winPath}\r\n`, stderr: "" });
       mockExec.mockResolvedValueOnce({ stdout: `${linuxPath}\n`, stderr: "" });
       mockReadFile.mockRejectedValueOnce(new Error("ENOENT"));
@@ -858,8 +850,6 @@ describe("readImage error paths", () => {
 
     it("throws with wslpath context when wslpath fails", async () => {
       const winPath = "C:\\Temp\\img.tmp";
-      // hasImage -> yes
-      mockExec.mockResolvedValueOnce({ stdout: "yes\r\n", stderr: "" });
       // PS_READ_IMAGE -> returns temp path
       mockExec.mockResolvedValueOnce({ stdout: `${winPath}\r\n`, stderr: "" });
       // wslpath -> fails
@@ -868,16 +858,12 @@ describe("readImage error paths", () => {
     });
 
     it("throws with PowerShell context when PS execution fails", async () => {
-      // hasImage -> yes
-      mockExec.mockResolvedValueOnce({ stdout: "yes\r\n", stderr: "" });
       // PS_READ_IMAGE -> fails
       mockExec.mockRejectedValueOnce(new Error("powershell.exe not found"));
       await expect(reader.readImage()).rejects.toThrow("PowerShell execution failed");
     });
 
     it("throws with temp file context when readFile fails", async () => {
-      // hasImage -> yes
-      mockExec.mockResolvedValueOnce({ stdout: "yes\r\n", stderr: "" });
       // PS_READ_IMAGE -> returns temp path
       mockExec.mockResolvedValueOnce({ stdout: "C:\\Temp\\img.tmp\r\n", stderr: "" });
       // wslpath -> success
@@ -889,8 +875,6 @@ describe("readImage error paths", () => {
     });
 
     it("throws when PowerShell returns empty stdout (no temp path)", async () => {
-      // hasImage -> yes
-      mockExec.mockResolvedValueOnce({ stdout: "yes\r\n", stderr: "" });
       // PS_READ_IMAGE -> empty stdout
       mockExec.mockResolvedValueOnce({ stdout: "\r\n", stderr: "" });
       // wslpath called with empty string
@@ -910,8 +894,6 @@ describe("readImage error paths", () => {
     });
 
     it("throws when PowerShell returns empty stdout (no temp path)", async () => {
-      // hasImage -> yes
-      mockExec.mockResolvedValueOnce({ stdout: "yes\r\n", stderr: "" });
       // PS_READ_IMAGE -> empty stdout
       mockExec.mockResolvedValueOnce({ stdout: "\r\n", stderr: "" });
       // readFile with empty path fails
@@ -952,7 +934,6 @@ describe("PowerShellClipboardReader (shared base behaviour)", () => {
   describe("readImage uses the PS_READ_IMAGE script via -EncodedCommand", () => {
     it("sends the correct PowerShell encoded command for reading", async () => {
       const fakeImage = Buffer.from("BASE-IMG");
-      mockExec.mockResolvedValueOnce({ stdout: "yes\r\n", stderr: "" });
       mockExec.mockResolvedValueOnce({
         stdout: "C:\\Temp\\img.tmp\r\n",
         stderr: "",
@@ -962,8 +943,8 @@ describe("PowerShellClipboardReader (shared base behaviour)", () => {
 
       await reader.readImage();
 
-      // Second exec call is the PS_READ_IMAGE command
-      const readCall = mockExec.mock.calls[1];
+      // First exec call is the PS_READ_IMAGE command (no more hasImage pre-check)
+      const readCall = mockExec.mock.calls[0];
       expect(readCall[0]).toBe("powershell.exe");
       expect(readCall[1][0]).toBe("-EncodedCommand");
       const decoded = Buffer.from(readCall[1][1], "base64").toString("utf16le");

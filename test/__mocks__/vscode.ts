@@ -106,6 +106,30 @@ export const Uri = {
   file: vi.fn((path: string) => ({ fsPath: path, scheme: 'file' })),
 };
 
+export class EventEmitter<T> {
+  private listeners: Array<(e: T) => void> = [];
+
+  event = (listener: (e: T) => void) => {
+    this.listeners.push(listener);
+    return {
+      dispose: () => {
+        const idx = this.listeners.indexOf(listener);
+        if (idx >= 0) this.listeners.splice(idx, 1);
+      },
+    };
+  };
+
+  fire(data: T): void {
+    for (const listener of this.listeners) {
+      listener(data);
+    }
+  }
+
+  dispose(): void {
+    this.listeners = [];
+  }
+}
+
 export const ExtensionContext = vi.fn();
 
 // Helper to override config values in tests

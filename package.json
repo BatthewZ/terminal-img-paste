@@ -24,6 +24,10 @@
       {
         "command": "terminalImgPaste.sendPathToTerminal",
         "title": "Send Image Path to Terminal"
+      },
+      {
+        "command": "terminalImgPaste.showDiagnostics",
+        "title": "Terminal Image Paste: Show Diagnostics"
       }
     ],
     "keybindings": [
