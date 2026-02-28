@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import * as path from 'path';
 import { EventEmitter, workspace, __setConfig, __resetConfig } from 'vscode';
 
 // ---------------------------------------------------------------------------
@@ -176,7 +177,7 @@ describe('getImageFolder', () => {
   it('returns resolved path when workspace is open', () => {
     const { api } = makeApi();
     const folder = api.getImageFolder();
-    expect(folder).toBe('/test/workspace/.tip-images');
+    expect(folder).toBe(path.resolve('/test/workspace', '.tip-images'));
   });
 
   it('returns undefined when no workspace is open', () => {
@@ -195,7 +196,7 @@ describe('getImageFolder', () => {
     __setConfig('folderName', 'screenshots');
     const { api } = makeApi();
     const folder = api.getImageFolder();
-    expect(folder).toBe('/test/workspace/screenshots');
+    expect(folder).toBe(path.resolve('/test/workspace', 'screenshots'));
   });
 });
 

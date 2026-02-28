@@ -9,7 +9,7 @@ vi.mock('fs');
 import { createImageStore, resolveFilenamePattern, getSubdirectory } from '../src/storage/imageStore';
 import { logger } from '../src/util/logger';
 
-const WORKSPACE_ROOT = '/test/workspace';
+const WORKSPACE_ROOT = path.resolve('/test/workspace');
 const DEFAULT_FOLDER = '.tip-images';
 const IMAGE_FOLDER = path.join(WORKSPACE_ROOT, DEFAULT_FOLDER);
 const GITIGNORE_PATH = path.join(WORKSPACE_ROOT, '.gitignore');
@@ -103,8 +103,9 @@ describe('createImageStore', () => {
 
       const result = await store.save(buf);
 
-      expect(result).toMatch(
-        /^\/test\/workspace\/\.tip-images\/img-.*\.png$/,
+      expect(path.dirname(result)).toBe(IMAGE_FOLDER);
+      expect(path.basename(result)).toMatch(
+        /^img-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}\.png$/,
       );
     });
 
