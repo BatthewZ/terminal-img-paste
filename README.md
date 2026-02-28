@@ -12,7 +12,6 @@ Copy a screenshot, press **Ctrl+Alt+V**, and the image is saved to your workspac
 
 - **Clipboard paste** — Press Ctrl+Alt+V (Cmd+Alt+V on macOS) to save a clipboard image and insert its path into the active terminal
 - **Explorer context menu** — Right-click any image file and select "Send Image Path to Terminal"
-- **Drag-and-drop sidebar** — Drop images from your OS or browser onto the Drop Zone panel in the activity bar
 - **Multi-format support** — Reads PNG, JPEG, BMP, WebP, and TIFF from the clipboard; auto-detects format
 - **Format conversion** — Optionally convert all images to PNG or JPEG on save
 - **Configurable filenames** — Use patterns with `{timestamp}`, `{date}`, `{time}`, `{n}`, `{hash}` placeholders
@@ -66,10 +65,6 @@ The image is saved to your workspace and the quoted file path appears at your te
 ```
 > '/home/you/project/.tip-images/img-2026-02-27T14-30-45-123.png' what does this diagram show?
 ```
-
-### Drag and Drop
-
-Open the **Terminal Image Paste** panel from the activity bar. Drop image files from your OS file manager or browser directly onto the Drop Zone. The image is saved and the path is inserted into the active terminal.
 
 ### Send an Existing Image
 
