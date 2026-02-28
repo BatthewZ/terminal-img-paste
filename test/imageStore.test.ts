@@ -93,7 +93,7 @@ describe('createImageStore', () => {
           /\.tip-images[/\\]img-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}\.png$/,
         ),
         buf,
-        { mode: 0o600 },
+        { flag: 'wx', mode: 0o600 },
       );
     });
 
@@ -773,7 +773,12 @@ describe('createImageStore', () => {
     });
 
     it('combined pattern like screenshot-{date}-{n} works', () => {
-      const existing = ['screenshot-2026-02-27-1.png', 'screenshot-2026-02-27-2.png'];
+      const now = new Date();
+      const y = now.getFullYear();
+      const mo = String(now.getMonth() + 1).padStart(2, '0');
+      const d = String(now.getDate()).padStart(2, '0');
+      const today = `${y}-${mo}-${d}`;
+      const existing = [`screenshot-${today}-1.png`, `screenshot-${today}-2.png`];
       const result = resolveFilenamePattern('screenshot-{date}-{n}', BUF_A, existing);
       expect(result).toMatch(/^screenshot-\d{4}-\d{2}-\d{2}-3$/);
     });

@@ -341,8 +341,8 @@ export function createImageStore(): ImageStore {
       }
 
       const fileName = generateFileName(format, imageBuffer, existingFiles);
-      const filePath = path.join(saveFolder, fileName);
-      await writeSecureFile(filePath, imageBuffer);
+      const requestedPath = path.join(saveFolder, fileName);
+      const filePath = await writeSecureFile(requestedPath, imageBuffer);
 
       // Defense-in-depth: verify the saved file also stays within the workspace
       await assertInsideWorkspace(filePath, root);

@@ -97,7 +97,7 @@ describe('image/convert', () => {
       expect(fs.promises.writeFile).toHaveBeenCalledWith(
         expect.stringContaining('tip-convert-in-'),
         inputData,
-        { mode: 0o600 },
+        { flag: 'wx', mode: 0o600 },
       );
 
       // Verify sips was called with correct arguments

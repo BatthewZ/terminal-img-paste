@@ -113,20 +113,20 @@ async function convertWithSips(
   const targetExt = targetFormat === 'jpeg' ? 'jpg' : 'png';
   const outputPath = path.join(tmpDir, `tip-convert-out-${Date.now()}.${targetExt}`);
 
-  await writeSecureFile(inputPath, data);
+  const actualInputPath = await writeSecureFile(inputPath, data);
   try {
     const sipsFormat = targetFormat === 'jpeg' ? 'jpeg' : 'png';
     await exec('sips', [
       '--setProperty',
       'format',
       sipsFormat,
-      inputPath,
+      actualInputPath,
       '--out',
       outputPath,
     ]);
     return await fs.promises.readFile(outputPath);
   } finally {
-    await fs.promises.unlink(inputPath).catch(() => {});
+    await fs.promises.unlink(actualInputPath).catch(() => {});
     await fs.promises.unlink(outputPath).catch(() => {});
   }
 }

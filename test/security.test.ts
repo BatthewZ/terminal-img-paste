@@ -100,8 +100,9 @@ describe('symlink escape detection', () => {
 describe('writeSecureFile', () => {
   it('always sets 0o600 permissions', async () => {
     const filePath = path.join(tmpDir, 'secure-file.bin');
-    await writeSecureFile(filePath, Buffer.from('secret'));
+    const actual = await writeSecureFile(filePath, Buffer.from('secret'));
 
+    expect(actual).toBe(filePath);
     const stat = fs.statSync(filePath);
     // On Unix, mode & 0o777 gives the permission bits
     expect(stat.mode & 0o777).toBe(0o600);
@@ -110,10 +111,40 @@ describe('writeSecureFile', () => {
   it('writes correct contents', async () => {
     const filePath = path.join(tmpDir, 'data.bin');
     const data = Buffer.from('hello-secure');
-    await writeSecureFile(filePath, data);
+    const actual = await writeSecureFile(filePath, data);
 
+    expect(actual).toBe(filePath);
     const contents = fs.readFileSync(filePath);
     expect(contents).toEqual(data);
+  });
+
+  it('does not overwrite an existing file', async () => {
+    const filePath = path.join(tmpDir, 'image.png');
+    const original = Buffer.from('original-data');
+    const second = Buffer.from('second-data');
+
+    await writeSecureFile(filePath, original);
+    const actual = await writeSecureFile(filePath, second);
+
+    // Should have written to a suffixed path instead
+    expect(actual).toBe(path.join(tmpDir, 'image-1.png'));
+    // Original file must be untouched
+    expect(fs.readFileSync(filePath)).toEqual(original);
+    // New file has the new data
+    expect(fs.readFileSync(actual)).toEqual(second);
+  });
+
+  it('increments suffix until a free slot is found', async () => {
+    const filePath = path.join(tmpDir, 'img.png');
+    await writeSecureFile(filePath, Buffer.from('v0'));
+    await writeSecureFile(filePath, Buffer.from('v1')); // -> img-1.png
+
+    const third = await writeSecureFile(filePath, Buffer.from('v2'));
+    expect(third).toBe(path.join(tmpDir, 'img-2.png'));
+
+    // Also collides with img-1.png
+    const fourth = await writeSecureFile(path.join(tmpDir, 'img-1.png'), Buffer.from('v3'));
+    expect(fourth).toBe(path.join(tmpDir, 'img-1-1.png'));
   });
 });
 
