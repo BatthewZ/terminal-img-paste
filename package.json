@@ -160,7 +160,7 @@
     "watch": "node esbuild.js --watch",
     "lint": "eslint src/",
     "test": "vitest run",
-    "test:integration": "RUN_INTEGRATION=1 vitest run --config vitest.integration.config.ts",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
     "package": "vsce package"
   },
   "devDependencies": {
