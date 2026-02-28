@@ -6,7 +6,6 @@ import { createImageStore, ImageStore } from './storage/imageStore';
 import { insertPathToTerminal } from './terminal/insertPath';
 import { convertImage, SaveFormat } from './image/convert';
 import { showImagePreview } from './views/previewPanel';
-import { DropZoneProvider } from './views/dropZoneProvider';
 import { logger } from './util/logger';
 import { notify } from './util/notify';
 import { Mutex } from './util/mutex';
@@ -125,13 +124,6 @@ export function activate(context: vscode.ExtensionContext): TerminalImgPasteApi 
     'terminalImgPaste.showDiagnostics',
     () => runDiagnostics(platform, reader),
   );
-
-  for (const viewId of ['terminalImgPaste.dropZone', 'terminalImgPaste.panelDropZone']) {
-    const provider = new DropZoneProvider(context.extensionUri, imageStore, pasteEmitter, pasteMutex);
-    context.subscriptions.push(
-      vscode.window.registerWebviewViewProvider(viewId, provider),
-    );
-  }
 
   context.subscriptions.push(pasteImageDisposable, sendPathDisposable, diagnosticsDisposable);
   logger.info(`Extension activated (platform: ${platform.os}, WSL: ${platform.isWSL})`);

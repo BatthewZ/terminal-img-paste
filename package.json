@@ -34,38 +34,6 @@
     "onStartupFinished"
   ],
   "contributes": {
-    "viewsContainers": {
-      "activitybar": [
-        {
-          "id": "terminalImgPaste",
-          "title": "Terminal Image Paste",
-          "icon": "assets/icon.png"
-        }
-      ],
-      "panel": [
-        {
-          "id": "terminalImgPastePanel",
-          "title": "Image Drop",
-          "icon": "assets/icon.png"
-        }
-      ]
-    },
-    "views": {
-      "terminalImgPaste": [
-        {
-          "type": "webview",
-          "id": "terminalImgPaste.dropZone",
-          "name": "Drop Zone"
-        }
-      ],
-      "terminalImgPastePanel": [
-        {
-          "type": "webview",
-          "id": "terminalImgPaste.panelDropZone",
-          "name": "Drop Zone"
-        }
-      ]
-    },
     "commands": [
       {
         "command": "terminalImgPaste.pasteImage",

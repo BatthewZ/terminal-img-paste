@@ -54,10 +54,6 @@ vi.mock('../src/views/previewPanel', () => ({
   showImagePreview: vi.fn().mockResolvedValue(true),
 }));
 
-vi.mock('../src/views/dropZoneProvider', () => ({
-  DropZoneProvider: vi.fn(),
-}));
-
 // Import after mocks
 import { activate, deactivate } from '../src/extension';
 import { createClipboardReader } from '../src/clipboard/index';
@@ -140,8 +136,8 @@ describe('activate', () => {
   it('pushes all disposables to context.subscriptions', () => {
     const ctx = makeContext();
     activate(ctx);
-    // 3 command disposables + 1 EventEmitter (pasteEmitter) + 2 dropZone view providers (sidebar + panel)
-    expect(ctx.subscriptions).toHaveLength(6);
+    // 3 command disposables + 1 EventEmitter (pasteEmitter)
+    expect(ctx.subscriptions).toHaveLength(4);
   });
 
   it('returns API object with all expected methods', () => {
