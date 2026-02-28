@@ -98,8 +98,10 @@ describe('symlink escape detection', () => {
   });
 });
 
+const isWindows = process.platform === 'win32';
+
 describe('writeSecureFile', () => {
-  it('always sets 0o600 permissions', async () => {
+  it.skipIf(isWindows)('always sets 0o600 permissions', async () => {
     const filePath = path.join(tmpDir, 'secure-file.bin');
     const actual = await writeSecureFile(filePath, Buffer.from('secret'));
 
@@ -150,7 +152,7 @@ describe('writeSecureFile', () => {
 });
 
 describe('file permissions after save', () => {
-  it('saved image has 0o600 permissions', async () => {
+  it.skipIf(isWindows)('saved image has 0o600 permissions', async () => {
     const store = createImageStore();
     const filePath = await store.save(fakePng('perms'));
 

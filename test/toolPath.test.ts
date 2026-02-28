@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import * as path from 'path';
 import { resolveToolPath, resolveToolPathOrFallback, clearToolPathCache } from '../src/util/toolPath';
 
 beforeEach(() => {
@@ -9,7 +10,7 @@ describe('resolveToolPath', () => {
   it('returns an absolute path for a known tool (ls)', async () => {
     const result = await resolveToolPath('ls');
     expect(result).toBeDefined();
-    expect(result!.startsWith('/')).toBe(true);
+    expect(path.isAbsolute(result!)).toBe(true);
   });
 
   it('returns undefined for a nonexistent tool', async () => {
@@ -36,7 +37,7 @@ describe('resolveToolPath', () => {
 describe('resolveToolPathOrFallback', () => {
   it('returns absolute path for a known tool', async () => {
     const result = await resolveToolPathOrFallback('ls');
-    expect(result.startsWith('/')).toBe(true);
+    expect(path.isAbsolute(result)).toBe(true);
   });
 
   it('returns the original name when tool is not found', async () => {
@@ -52,6 +53,6 @@ describe('clearToolPathCache', () => {
     // After clearing, the path should still resolve correctly
     const result = await resolveToolPath('ls');
     expect(result).toBeDefined();
-    expect(result!.startsWith('/')).toBe(true);
+    expect(path.isAbsolute(result!)).toBe(true);
   });
 });
