@@ -1,3 +1,7 @@
+# Purpose
+
+I wanted to be able to copy/paste or screenshot/paste images or image files directly into Claude CLI for it to analyze. And now I can!
+
 # Terminal Image Paste
 
 Paste clipboard images into your VS Code terminal as file paths. Designed for CLI tools like [Claude Code](https://docs.anthropic.com/en/docs/claude-code) that accept image paths as input.
@@ -35,13 +39,13 @@ code --install-extension terminal-img-paste
 
 The extension uses native clipboard tools to read image data. Most platforms work out of the box — macOS and Linux need a small install:
 
-| Platform | Required Tool | Install Command |
-|---|---|---|
-| macOS | [pngpaste](https://github.com/jcsalterego/pngpaste) | `brew install pngpaste` |
-| Linux (X11) | xclip | `sudo apt install xclip` |
-| Linux (Wayland) | wl-clipboard | `sudo apt install wl-clipboard` |
-| Windows | PowerShell | Built-in, nothing to install |
-| WSL2 | PowerShell via WSL interop | Built-in, nothing to install |
+| Platform        | Required Tool                                       | Install Command                 |
+| --------------- | --------------------------------------------------- | ------------------------------- |
+| macOS           | [pngpaste](https://github.com/jcsalterego/pngpaste) | `brew install pngpaste`         |
+| Linux (X11)     | xclip                                               | `sudo apt install xclip`        |
+| Linux (Wayland) | wl-clipboard                                        | `sudo apt install wl-clipboard` |
+| Windows         | PowerShell                                          | Built-in, nothing to install    |
+| WSL2            | PowerShell via WSL interop                          | Built-in, nothing to install    |
 
 On macOS, `osascript` is used as a fallback if `pngpaste` is unavailable. On WSL2 with WSLg, native Linux tools (xclip/wl-paste) are preferred with PowerShell as fallback. On Linux, the extension tries both X11 and Wayland tools with automatic fallback.
 
@@ -73,11 +77,11 @@ Right-click any image file (PNG, JPG, JPEG, GIF, BMP, WebP, SVG) in the VS Code 
 
 ### Commands
 
-| Command | Keybinding | Description |
-|---|---|---|
-| `Paste Clipboard Image to Terminal` | Ctrl+Alt+V / Cmd+Alt+V | Save clipboard image and insert path into terminal |
-| `Send Image Path to Terminal` | — (explorer context menu) | Insert an existing file's path into terminal |
-| `Terminal Image Paste: Show Diagnostics` | — | Show diagnostic report with platform, clipboard, and storage info |
+| Command                                  | Keybinding                | Description                                                       |
+| ---------------------------------------- | ------------------------- | ----------------------------------------------------------------- |
+| `Paste Clipboard Image to Terminal`      | Ctrl+Alt+V / Cmd+Alt+V    | Save clipboard image and insert path into terminal                |
+| `Send Image Path to Terminal`            | — (explorer context menu) | Insert an existing file's path into terminal                      |
+| `Terminal Image Paste: Show Diagnostics` | —                         | Show diagnostic report with platform, clipboard, and storage info |
 
 All commands are available from the Command Palette (`Ctrl+Shift+P`).
 
@@ -85,28 +89,28 @@ All commands are available from the Command Palette (`Ctrl+Shift+P`).
 
 All settings live under the `terminalImgPaste` namespace. Open **Settings** and search for "Terminal Image Paste", or edit `settings.json` directly:
 
-| Setting | Type | Default | Description |
-|---|---|---|---|
-| `folderName` | string | `.tip-images` | Image storage folder relative to workspace root |
-| `maxImages` | number | `20` | Auto-delete oldest images when this count is exceeded |
-| `autoGitIgnore` | boolean | `true` | Add the image folder to `.gitignore` automatically |
-| `sendNewline` | boolean | `false` | Send a newline (Enter) after inserting the path |
-| `saveFormat` | `"auto"` \| `"png"` \| `"jpeg"` | `auto` | Image save format. `auto` preserves the native clipboard format |
-| `filenamePattern` | string | `img-{timestamp}` | Filename pattern (see [Filename Placeholders](#filename-pattern-placeholders) below) |
-| `organizeFolders` | `"flat"` \| `"daily"` \| `"monthly"` | `flat` | How to organize saved images into subdirectories |
-| `showPreview` | boolean | `false` | Show a preview of the clipboard image before saving |
-| `warnOnRemote` | boolean | `true` | Warn when pasting in remote terminals (SSH, containers) |
-| `notifications` | `"all"` \| `"errors"` \| `"none"` | `all` | Notification verbosity. `errors` suppresses info/warnings; `none` routes all to the output channel |
+| Setting           | Type                                 | Default           | Description                                                                                        |
+| ----------------- | ------------------------------------ | ----------------- | -------------------------------------------------------------------------------------------------- |
+| `folderName`      | string                               | `.tip-images`     | Image storage folder relative to workspace root                                                    |
+| `maxImages`       | number                               | `20`              | Auto-delete oldest images when this count is exceeded                                              |
+| `autoGitIgnore`   | boolean                              | `true`            | Add the image folder to `.gitignore` automatically                                                 |
+| `sendNewline`     | boolean                              | `false`           | Send a newline (Enter) after inserting the path                                                    |
+| `saveFormat`      | `"auto"` \| `"png"` \| `"jpeg"`      | `auto`            | Image save format. `auto` preserves the native clipboard format                                    |
+| `filenamePattern` | string                               | `img-{timestamp}` | Filename pattern (see [Filename Placeholders](#filename-pattern-placeholders) below)               |
+| `organizeFolders` | `"flat"` \| `"daily"` \| `"monthly"` | `flat`            | How to organize saved images into subdirectories                                                   |
+| `showPreview`     | boolean                              | `false`           | Show a preview of the clipboard image before saving                                                |
+| `warnOnRemote`    | boolean                              | `true`            | Warn when pasting in remote terminals (SSH, containers)                                            |
+| `notifications`   | `"all"` \| `"errors"` \| `"none"`    | `all`             | Notification verbosity. `errors` suppresses info/warnings; `none` routes all to the output channel |
 
 ### Filename Pattern Placeholders
 
-| Placeholder | Description | Example |
-|---|---|---|
-| `{timestamp}` | Full timestamp with milliseconds | `2026-02-27T14-30-45-123` |
-| `{date}` | Date only | `2026-02-27` |
-| `{time}` | Time only | `14-30-45` |
-| `{n}` | Auto-incrementing sequential number | `1`, `2`, `3` |
-| `{hash}` | First 8 characters of SHA-256 hash of image data | `a1b2c3d4` |
+| Placeholder   | Description                                      | Example                   |
+| ------------- | ------------------------------------------------ | ------------------------- |
+| `{timestamp}` | Full timestamp with milliseconds                 | `2026-02-27T14-30-45-123` |
+| `{date}`      | Date only                                        | `2026-02-27`              |
+| `{time}`      | Time only                                        | `14-30-45`                |
+| `{n}`         | Auto-incrementing sequential number              | `1`, `2`, `3`             |
+| `{hash}`      | First 8 characters of SHA-256 hash of image data | `a1b2c3d4`                |
 
 If the pattern contains no uniqueness placeholder (`{timestamp}`, `{n}`, or `{hash}`), a timestamp is appended automatically to prevent filename collisions.
 
@@ -115,7 +119,9 @@ If the pattern contains no uniqueness placeholder (`{timestamp}`, `{n}`, or `{ha
 Other VS Code extensions can consume the Terminal Image Paste API:
 
 ```typescript
-const tipExtension = vscode.extensions.getExtension('terminal-img-paste.terminal-img-paste');
+const tipExtension = vscode.extensions.getExtension(
+  "terminal-img-paste.terminal-img-paste",
+);
 const api = tipExtension?.exports;
 
 if (api) {
@@ -126,7 +132,7 @@ if (api) {
   }
 
   // Send a path to the active terminal
-  api.sendPathToTerminal('/path/to/image.png');
+  api.sendPathToTerminal("/path/to/image.png");
 
   // Get the image storage folder
   const folder = api.getImageFolder();
@@ -178,6 +184,7 @@ Check that `terminalImgPaste.maxImages` is set to a positive integer. Image file
 ### WSL2-specific issues
 
 The extension accesses the Windows clipboard from WSL by invoking `powershell.exe` through WSL interop. If this fails:
+
 - Verify WSL interop is enabled: `cat /proc/sys/fs/binfmt_misc/WSLInterop` should exist
 - Check that `powershell.exe` is accessible from your WSL shell
 - With WSLg installed, the extension prefers native Linux tools (`xclip`/`wl-paste`) which are faster and more reliable
