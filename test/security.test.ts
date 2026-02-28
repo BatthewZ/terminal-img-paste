@@ -93,7 +93,8 @@ describe('symlink escape detection', () => {
     expect(fs.existsSync(filePath)).toBe(true);
     // The file should actually be in the real directory
     const realFilePath = fs.realpathSync(filePath);
-    expect(realFilePath.startsWith(realDir)).toBe(true);
+    const resolvedRealDir = fs.realpathSync(realDir);
+    expect(realFilePath.startsWith(resolvedRealDir)).toBe(true);
   });
 });
 
