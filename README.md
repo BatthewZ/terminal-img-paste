@@ -4,7 +4,7 @@ I wanted to be able to copy/paste or screenshot/paste images or image files dire
 
 # Terminal Image Paste
 
-Paste clipboard images into your VS Code terminal as file paths. Designed for CLI tools like [Claude Code](https://docs.anthropic.com/en/docs/claude-code) that accept image paths as input.
+Paste clipboard images or copy/paste files into your VS Code terminal as file paths. Designed for CLI tools like [Claude Code](https://docs.anthropic.com/en/docs/claude-code) that accept image paths as input.
 
 Copy a screenshot, press **Ctrl+Alt+V**, and the image is saved to your workspace with the path inserted at your terminal cursor — ready to send.
 
