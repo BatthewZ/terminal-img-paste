@@ -1,4 +1,4 @@
-# Terminal Image Paste
+# BatthewZ Terminal Image Paste
 
 Paste clipboard images or copy/paste files into your VS Code terminal as file paths. Designed for CLI tools like [Claude Code](https://docs.anthropic.com/en/docs/claude-code) that accept image paths as input.
 
@@ -7,14 +7,15 @@ Copy a screenshot, press **Ctrl+Alt+V**, and the image is saved to your workspac
 ## Features
 
 - **Clipboard paste** — Press Ctrl+Alt+V (Cmd+Alt+V on macOS) to save a clipboard image and insert its path into the active terminal
+- **File paste** — Copy an image file in your OS file manager, press Ctrl+Alt+V, and the file path is inserted into the terminal (works on all platforms)
 - **Explorer context menu** — Right-click any image file and select "Send Image Path to Terminal"
-- **Multi-format support** — Reads PNG, JPEG, BMP, WebP, and TIFF from the clipboard; auto-detects format
+- **Multi-format support** — Reads PNG, JPEG, GIF, BMP, WebP, and TIFF from the clipboard; auto-detects format. On macOS, WebP is not detected; on Windows/WSL, images are always read as PNG
 - **Format conversion** — Optionally convert all images to PNG or JPEG on save
 - **Configurable filenames** — Use patterns with `{timestamp}`, `{date}`, `{time}`, `{n}`, `{hash}` placeholders
 - **Folder organization** — Store images flat, or in daily/monthly subdirectories
 - **Auto-cleanup** — Oldest images are automatically deleted when the count exceeds `maxImages`
 - **Auto .gitignore** — The image folder is added to `.gitignore` on first save
-- **Image preview** — Optionally preview clipboard images before saving (opt-in)
+- **Image preview** — Optionally preview clipboard images before saving (opt-in, 10-second auto-cancel)
 - **Shell-aware quoting** — Paths are quoted correctly for bash, zsh, fish, PowerShell, and cmd
 - **Remote terminal awareness** — Warns when pasting in SSH/container terminals where local paths may not be accessible
 - **Diagnostic debug mode** — Run "Show Diagnostics" to inspect platform, clipboard, storage, and terminal state
@@ -24,10 +25,10 @@ Copy a screenshot, press **Ctrl+Alt+V**, and the image is saved to your workspac
 
 ### Install
 
-Search for **Terminal Image Paste** in the VS Code Extensions panel, or install from the command line:
+Search for **BatthewZ Terminal Image Paste** in the VS Code Extensions panel, or install from the command line:
 
 ```
-code --install-extension terminal-img-paste
+code --install-extension BatthewZTools.batthewz-terminal-image-paste
 ```
 
 ### Platform Prerequisites
@@ -50,7 +51,7 @@ The extension checks for the required tool on startup and shows a warning if it'
 
 ### Paste a Clipboard Image
 
-1. Copy an image to your clipboard (screenshot, right-click "Copy image", etc.)
+1. Copy an image to your clipboard (screenshot, right-click "Copy image", etc.) — or copy an image file in your OS file manager
 2. Focus a VS Code terminal
 3. Press **Ctrl+Alt+V** (macOS: **Cmd+Alt+V**)
 
@@ -91,7 +92,7 @@ All settings live under the `terminalImgPaste` namespace. Open **Settings** and 
 | `organizeFolders` | `"flat"` \| `"daily"` \| `"monthly"` | `flat`            | How to organize saved images into subdirectories                                                   |
 | `showPreview`     | boolean                              | `false`           | Show a preview of the clipboard image before saving                                                |
 | `warnOnRemote`    | boolean                              | `true`            | Warn when pasting in remote terminals (SSH, containers)                                            |
-| `notifications`   | `"all"` \| `"errors"` \| `"none"`    | `all`             | Notification verbosity. `errors` suppresses info/warnings; `none` routes all to the output channel |
+| `notifications`   | `"all"` \| `"errors"` \| `"none"`    | `all`             | Notification verbosity. `errors` suppresses info/warnings; `none` routes all to the output channel. Warning dialogs (e.g. remote terminal) are auto-approved when suppressed |
 
 ### Filename Pattern Placeholders
 
@@ -111,7 +112,7 @@ Other VS Code extensions can consume the Terminal Image Paste API:
 
 ```typescript
 const tipExtension = vscode.extensions.getExtension(
-  "terminal-img-paste.terminal-img-paste",
+  "BatthewZTools.batthewz-terminal-image-paste",
 );
 const api = tipExtension?.exports;
 
@@ -137,9 +138,9 @@ if (api) {
 
 ## How It Works
 
-1. **Clipboard read** — The extension invokes a platform-native CLI tool (`pngpaste`, `xclip`, `wl-paste`, or PowerShell) to read raw image data from the system clipboard.
-2. **Format detection** — The clipboard format is auto-detected from magic bytes (PNG, JPEG, BMP, WebP, TIFF).
-3. **Optional preview** — If `showPreview` is enabled, a webview panel shows the image with Paste/Cancel buttons.
+1. **Clipboard read** — The extension invokes a platform-native CLI tool (`pngpaste`, `xclip`, `wl-paste`, or PowerShell) to read raw image data from the system clipboard. If the clipboard contains a copied file path instead of raw image data, the file is read from disk.
+2. **Format detection** — The clipboard format is auto-detected from magic bytes (PNG, JPEG, GIF, BMP, WebP, TIFF).
+3. **Optional preview** — If `showPreview` is enabled, a webview panel shows the image with Paste/Cancel buttons. The preview auto-cancels after 10 seconds if no action is taken.
 4. **Optional conversion** — If `saveFormat` is set to `png` or `jpeg`, the image is converted before saving.
 5. **Save to disk** — The image buffer is written to the configured folder with a filename generated from the `filenamePattern` setting.
 6. **Insert path** — The absolute file path, quoted for the active terminal's shell type, is sent to the terminal via `terminal.sendText()`.
@@ -170,7 +171,7 @@ The extension needs an open workspace to save images. Open a folder or workspace
 
 ### Images aren't being cleaned up
 
-Check that `terminalImgPaste.maxImages` is set to a positive integer. Image files (`.png`, `.jpg`, `.jpeg`, `.tiff`, `.bmp`, `.webp`) in the image folder are counted and cleaned up.
+Check that `terminalImgPaste.maxImages` is set to a positive integer. Image files (`.png`, `.jpg`, `.jpeg`, `.gif`, `.tiff`, `.bmp`, `.webp`) in the image folder are counted and cleaned up.
 
 ### WSL2-specific issues
 
