@@ -24,11 +24,15 @@ vi.mock("fs", () => {
       promises: {
         readFile: vi.fn(),
         unlink: vi.fn().mockResolvedValue(undefined),
+        mkdtemp: vi.fn(),
+        rm: vi.fn(),
       },
     },
     promises: {
       readFile: vi.fn(),
       unlink: vi.fn().mockResolvedValue(undefined),
+      mkdtemp: vi.fn(),
+      rm: vi.fn(),
     },
   };
 });
@@ -51,6 +55,8 @@ const mockExec = vi.mocked(exec);
 const mockExecBuffer = vi.mocked(execBuffer);
 const mockReadFile = vi.mocked(fs.promises.readFile);
 const mockUnlink = vi.mocked(fs.promises.unlink);
+const mockMkdtemp = vi.mocked(fs.promises.mkdtemp);
+const mockRm = vi.mocked(fs.promises.rm);
 const mockResolveToolPathOrFallback = vi.mocked(resolveToolPathOrFallback);
 
 // Re-establish toolPath mock after mockReset clears implementations
@@ -1239,6 +1245,8 @@ describe("MacosOsascriptClipboardReader", () => {
 
   beforeEach(() => {
     reader = new MacosOsascriptClipboardReader();
+    mockMkdtemp.mockResolvedValue("/tmp/tip-osascript-XXXXXX" as any);
+    mockRm.mockResolvedValue(undefined);
   });
 
   it("requiredTool() returns 'osascript (built-in)'", () => {
@@ -1339,68 +1347,97 @@ describe("MacosOsascriptClipboardReader", () => {
       const fakeImage = Buffer.from("OSASCRIPT-PNG");
       // detectFormat -> clipboard info
       mockExec.mockResolvedValueOnce({ stdout: "«class PNGf», 42", stderr: "" });
-      // execBuffer -> osascript
-      mockExecBuffer.mockResolvedValueOnce({ stdout: fakeImage, stderr: "" });
+      // osascript write to temp file
+      mockExec.mockResolvedValueOnce({ stdout: "", stderr: "" });
+      // read temp file
+      mockReadFile.mockResolvedValueOnce(fakeImage);
 
       const result = await reader.readImage();
       expect(result).toEqual({ data: fakeImage, format: "png" });
-      expect(mockExecBuffer).toHaveBeenCalledWith("osascript", [
-        "-e",
+      // Second exec call should be the osascript write-to-file command
+      const osascriptCall = mockExec.mock.calls[1];
+      expect(osascriptCall[0]).toBe("osascript");
+      expect(osascriptCall[1]).toContainEqual(
         "set imgData to (the clipboard as «class PNGf»)",
-        "-e",
-        "return imgData",
-      ]);
+      );
+      expect(osascriptCall[1]).toContainEqual(
+        "  write imgData to fileRef",
+      );
     });
 
     it("extracts JPEG natively via osascript", async () => {
       const fakeImage = Buffer.from("OSASCRIPT-JPEG");
       // detectFormat -> clipboard info with JPEG
       mockExec.mockResolvedValueOnce({ stdout: "«class JPEG», 2048", stderr: "" });
-      // execBuffer -> osascript with JPEG class
-      mockExecBuffer.mockResolvedValueOnce({ stdout: fakeImage, stderr: "" });
+      // osascript write to temp file
+      mockExec.mockResolvedValueOnce({ stdout: "", stderr: "" });
+      // read temp file
+      mockReadFile.mockResolvedValueOnce(fakeImage);
 
       const result = await reader.readImage();
       expect(result).toEqual({ data: fakeImage, format: "jpeg" });
-      expect(mockExecBuffer).toHaveBeenCalledWith("osascript", [
-        "-e",
+      const osascriptCall = mockExec.mock.calls[1];
+      expect(osascriptCall[1]).toContainEqual(
         "set imgData to (the clipboard as «class JPEG»)",
-        "-e",
-        "return imgData",
-      ]);
+      );
     });
 
     it("extracts TIFF natively via osascript", async () => {
       const fakeImage = Buffer.from("OSASCRIPT-TIFF");
       // detectFormat -> clipboard info with TIFF
       mockExec.mockResolvedValueOnce({ stdout: "«class TIFF», 1024", stderr: "" });
-      // execBuffer -> osascript with TIFF class
-      mockExecBuffer.mockResolvedValueOnce({ stdout: fakeImage, stderr: "" });
+      // osascript write to temp file
+      mockExec.mockResolvedValueOnce({ stdout: "", stderr: "" });
+      // read temp file
+      mockReadFile.mockResolvedValueOnce(fakeImage);
 
       const result = await reader.readImage();
       expect(result).toEqual({ data: fakeImage, format: "tiff" });
-      expect(mockExecBuffer).toHaveBeenCalledWith("osascript", [
-        "-e",
+      const osascriptCall = mockExec.mock.calls[1];
+      expect(osascriptCall[1]).toContainEqual(
         "set imgData to (the clipboard as «class TIFF»)",
-        "-e",
-        "return imgData",
-      ]);
+      );
     });
 
     it("falls back to PNG for BMP (unsupported by osascript class map)", async () => {
       const fakeImage = Buffer.from("OSASCRIPT-BMP-AS-PNG");
       // detectFormat -> clipboard info with BMP
       mockExec.mockResolvedValueOnce({ stdout: "«class BMP », 4096", stderr: "" });
-      // execBuffer -> osascript falls back to PNGf
-      mockExecBuffer.mockResolvedValueOnce({ stdout: fakeImage, stderr: "" });
+      // osascript write to temp file
+      mockExec.mockResolvedValueOnce({ stdout: "", stderr: "" });
+      // read temp file
+      mockReadFile.mockResolvedValueOnce(fakeImage);
 
       const result = await reader.readImage();
       expect(result).toEqual({ data: fakeImage, format: "png" });
-      expect(mockExecBuffer).toHaveBeenCalledWith("osascript", [
-        "-e",
+      const osascriptCall = mockExec.mock.calls[1];
+      expect(osascriptCall[1]).toContainEqual(
         "set imgData to (the clipboard as «class PNGf»)",
-        "-e",
-        "return imgData",
-      ]);
+      );
+    });
+
+    it("cleans up temp directory after successful read", async () => {
+      const fakeImage = Buffer.from("OSASCRIPT-PNG");
+      mockExec.mockResolvedValueOnce({ stdout: "«class PNGf», 42", stderr: "" });
+      mockExec.mockResolvedValueOnce({ stdout: "", stderr: "" });
+      mockReadFile.mockResolvedValueOnce(fakeImage);
+
+      await reader.readImage();
+      expect(mockRm).toHaveBeenCalledWith(
+        "/tmp/tip-osascript-XXXXXX",
+        { recursive: true },
+      );
+    });
+
+    it("cleans up temp directory even when osascript fails", async () => {
+      mockExec.mockResolvedValueOnce({ stdout: "«class PNGf», 42", stderr: "" });
+      mockExec.mockRejectedValueOnce(new Error("osascript failed"));
+
+      await expect(reader.readImage()).rejects.toThrow("osascript failed");
+      expect(mockRm).toHaveBeenCalledWith(
+        "/tmp/tip-osascript-XXXXXX",
+        { recursive: true },
+      );
     });
 
     it("throws when no image in clipboard", async () => {
