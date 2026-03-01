@@ -1,5 +1,7 @@
 # BatthewZ Terminal Image Paste
 
+Built for WSL2, Linux, MacOS and Windows.
+
 Paste clipboard images or copy/paste files into your VS Code terminal as file paths. Designed for CLI tools like [Claude Code](https://docs.anthropic.com/en/docs/claude-code) that accept image paths as input.
 
 Copy a screenshot, press **Ctrl+Alt+V**, and the image is saved to your workspace with the path inserted at your terminal cursor — ready to send.
@@ -11,7 +13,7 @@ Copy a screenshot, press **Ctrl+Alt+V**, and the image is saved to your workspac
 - **Explorer context menu** — Right-click any image file and select "Send Image Path to Terminal"
 - **Multi-format support** — Reads PNG, JPEG, GIF, BMP, WebP, and TIFF from the clipboard; auto-detects format. On macOS, WebP is not detected; on Windows/WSL, images are always read as PNG
 - **Format conversion** — Optionally convert all images to PNG or JPEG on save
-- **Configurable filenames** — Use patterns with `{timestamp}`, `{date}`, `{time}`, `{n}`, `{hash}` placeholders
+- **Configurable filenames** — Use patterns with `{timestamp}`, `{date}`, `{time}`, `{n}`, `{hash}` placeholdersd
 - **Folder organization** — Store images flat, or in daily/monthly subdirectories
 - **Auto-cleanup** — Oldest images are automatically deleted when the count exceeds `maxImages`
 - **Auto .gitignore** — The image folder is added to `.gitignore` on first save
@@ -81,17 +83,17 @@ All commands are available from the Command Palette (`Ctrl+Shift+P`).
 
 All settings live under the `terminalImgPaste` namespace. Open **Settings** and search for "Terminal Image Paste", or edit `settings.json` directly:
 
-| Setting           | Type                                 | Default           | Description                                                                                        |
-| ----------------- | ------------------------------------ | ----------------- | -------------------------------------------------------------------------------------------------- |
-| `folderName`      | string                               | `.tip-images`     | Image storage folder relative to workspace root                                                    |
-| `maxImages`       | number                               | `20`              | Auto-delete oldest images when this count is exceeded                                              |
-| `autoGitIgnore`   | boolean                              | `true`            | Add the image folder to `.gitignore` automatically                                                 |
-| `sendNewline`     | boolean                              | `false`           | Send a newline (Enter) after inserting the path                                                    |
-| `saveFormat`      | `"auto"` \| `"png"` \| `"jpeg"`      | `auto`            | Image save format. `auto` preserves the native clipboard format                                    |
-| `filenamePattern` | string                               | `img-{timestamp}` | Filename pattern (see [Filename Placeholders](#filename-pattern-placeholders) below)               |
-| `organizeFolders` | `"flat"` \| `"daily"` \| `"monthly"` | `flat`            | How to organize saved images into subdirectories                                                   |
-| `showPreview`     | boolean                              | `false`           | Show a preview of the clipboard image before saving                                                |
-| `warnOnRemote`    | boolean                              | `true`            | Warn when pasting in remote terminals (SSH, containers)                                            |
+| Setting           | Type                                 | Default           | Description                                                                                                                                                                  |
+| ----------------- | ------------------------------------ | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `folderName`      | string                               | `.tip-images`     | Image storage folder relative to workspace root                                                                                                                              |
+| `maxImages`       | number                               | `20`              | Auto-delete oldest images when this count is exceeded                                                                                                                        |
+| `autoGitIgnore`   | boolean                              | `true`            | Add the image folder to `.gitignore` automatically                                                                                                                           |
+| `sendNewline`     | boolean                              | `false`           | Send a newline (Enter) after inserting the path                                                                                                                              |
+| `saveFormat`      | `"auto"` \| `"png"` \| `"jpeg"`      | `auto`            | Image save format. `auto` preserves the native clipboard format                                                                                                              |
+| `filenamePattern` | string                               | `img-{timestamp}` | Filename pattern (see [Filename Placeholders](#filename-pattern-placeholders) below)                                                                                         |
+| `organizeFolders` | `"flat"` \| `"daily"` \| `"monthly"` | `flat`            | How to organize saved images into subdirectories                                                                                                                             |
+| `showPreview`     | boolean                              | `false`           | Show a preview of the clipboard image before saving                                                                                                                          |
+| `warnOnRemote`    | boolean                              | `true`            | Warn when pasting in remote terminals (SSH, containers)                                                                                                                      |
 | `notifications`   | `"all"` \| `"errors"` \| `"none"`    | `all`             | Notification verbosity. `errors` suppresses info/warnings; `none` routes all to the output channel. Warning dialogs (e.g. remote terminal) are auto-approved when suppressed |
 
 ### Filename Pattern Placeholders
