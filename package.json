@@ -2,7 +2,7 @@
   "name": "batthewz-terminal-image-paste",
   "displayName": "BatthewZ Terminal Image Paste",
   "description": "Paste clipboard images into VS Code terminal as file paths — works with CLI tools like Claude Code that accept image paths",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "publisher": "BatthewZTools",
   "license": "MIT",
   "repository": {
