@@ -1,13 +1,13 @@
 {
-  "name": "terminal-img-paste",
-  "displayName": "Terminal Image Paste",
+  "name": "batthewz-terminal-image-paste",
+  "displayName": "BatthewZ Terminal Image Paste",
   "description": "Paste clipboard images into VS Code terminal as file paths — works with CLI tools like Claude Code that accept image paths",
-  "version": "0.0.1",
-  "publisher": "terminal-img-paste",
+  "version": "1.0.0",
+  "publisher": "BatthewZTools",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/terminal-img-paste/terminal-img-paste"
+    "url": "https://github.com/BatthewZ/terminal-img-paste"
   },
   "keywords": [
     "clipboard",
@@ -89,7 +89,11 @@
         },
         "terminalImgPaste.saveFormat": {
           "type": "string",
-          "enum": ["auto", "png", "jpeg"],
+          "enum": [
+            "auto",
+            "png",
+            "jpeg"
+          ],
           "default": "auto",
           "description": "Image save format. 'auto' preserves native format, 'png' or 'jpeg' forces conversion."
         },
@@ -100,7 +104,11 @@
         },
         "terminalImgPaste.organizeFolders": {
           "type": "string",
-          "enum": ["flat", "daily", "monthly"],
+          "enum": [
+            "flat",
+            "daily",
+            "monthly"
+          ],
           "default": "flat",
           "description": "How to organize saved images. 'flat' puts all images in the root folder. 'daily' creates YYYY-MM-DD subdirectories. 'monthly' creates YYYY-MM subdirectories."
         },
@@ -116,7 +124,11 @@
         },
         "terminalImgPaste.notifications": {
           "type": "string",
-          "enum": ["all", "errors", "none"],
+          "enum": [
+            "all",
+            "errors",
+            "none"
+          ],
           "default": "all",
           "description": "Control notification verbosity. 'all' shows all messages (status bar, warnings, errors). 'errors' suppresses success and warning messages; only shows errors. 'none' routes all feedback to the output channel only."
         }

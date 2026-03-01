@@ -1,7 +1,3 @@
-# Purpose
-
-I wanted to be able to copy/paste or screenshot/paste images or image files directly into Claude CLI for it to analyze. And now I can!
-
 # Terminal Image Paste
 
 Paste clipboard images into your VS Code terminal as file paths. Designed for CLI tools like [Claude Code](https://docs.anthropic.com/en/docs/claude-code) that accept image paths as input.
